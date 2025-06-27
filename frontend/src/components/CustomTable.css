@@ -1,0 +1,29 @@
+.custom-table {
+    width: max-content;
+    min-width: 100%;
+    color: #ffffff;
+    font-size: 0.85rem;
+  }
+  
+  .table-row {
+    display: flex;
+  }
+  
+  .table-header-cell {
+    flex: 1;
+    padding: 8px;
+    background-color: #2c2c2c;
+    font-weight: bold;
+    border-bottom: 1px solid #444;
+    white-space: nowrap;
+  }
+  
+  .table-cell {
+    flex: 1;
+    padding: 8px;
+    border-bottom: 1px solid #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  

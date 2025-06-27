@@ -1,0 +1,87 @@
+isc_ref: 9.75           # Corriente de cortocircuito (Isc) del panel en amperios
+isc_correction: 1.25    # Factor de corrección normativa (por ejemplo, 25%)
+number_of_parallel_strings: 2
+
+cable:
+  type: RV-K
+  material: copper
+  insulation: XLPE
+  max_temp: 90  # °C, temperatura máxima del conductor según el tipo
+
+installation:
+  method: buried  # opciones: buried, tray_perforated, tray_non_perforated, conduit
+  depth_cm: 60    # solo aplica si method: buried
+  layout: single_layer  # opciones: single_layer, multilayer
+  separation: yes        # separación térmica entre cables (sí/no)
+
+correction_factors:
+  ambient_temperature:
+    current_ambient: 40  # °C
+    values:
+      25: 1.08
+      30: 1.04
+      35: 1.00
+      40: 0.96
+      45: 0.91
+      50: 0.87
+      55: 0.82
+      60: 0.76
+
+  grouping:
+    buried:
+      single_layer:
+        values:
+          1: 1.00
+          2: 0.95
+          3: 0.89
+          4: 0.86
+          5: 0.83
+          6: 0.80
+          7: 0.78
+          8: 0.76
+          9: 0.75
+          "10+": 0.73
+      multilayer:
+        values:
+          1: 0.95
+          2: 0.90
+          3: 0.85
+          "4+": 0.80
+
+    tray_perforated:
+      values:
+        1: 1.00
+        2: 0.95
+        3: 0.87
+        4: 0.84
+        5: 0.80
+        6: 0.78
+        "7+": 0.75
+
+    tray_non_perforated:
+      values:
+        1: 1.00
+        2: 0.92
+        3: 0.84
+        4: 0.80
+        5: 0.76
+        "6+": 0.72
+
+    conduit:
+      values:
+        1: 1.00
+        2: 0.90
+        3: 0.80
+        4: 0.75
+        "5+": 0.70
+
+  soil_thermal_resistivity: 1.2  # K·m/W
+
+  cable_insulation_factors:
+    PVC: 0.85
+    XLPE: 1.00
+    EPR: 1.05
+
+voltage_drop:
+  max_percentage: 1.5  # [%]
+  reference_voltage: 1500  # Vdc

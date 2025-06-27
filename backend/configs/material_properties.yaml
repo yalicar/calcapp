@@ -1,0 +1,8 @@
+materials:
+  copper:
+    resistivity_20C: 1.72e-8  # Ω·m
+    temp_coefficient: 0.00393  # 1/°C
+
+  aluminum:
+    resistivity_20C: 2.82e-8  # Ω·m
+    temp_coefficient: 0.00403  # 1/°C

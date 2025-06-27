@@ -1,0 +1,17 @@
+# Ignorar entornos, dependencias y cachés
+__pycache__/
+*.pyc
+
+# Ignorar node_modules en raíz y frontend
+node_modules/
+frontend/node_modules/
+
+# Archivos temporales
+*.log
+.DS_Store
+
+# Archivos específicos del entorno Python
+*.env
+*.venv
+*.egg-info/
+
