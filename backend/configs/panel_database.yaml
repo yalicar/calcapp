@@ -1,0 +1,230 @@
+# Base de datos de paneles fotovoltaicos
+# Los parámetros específicos del panel se obtienen de aquí usando panel_model del project_info
+
+panels:
+  
+  # Paneles Canadian Solar
+  "Canadian Solar CS3W-400P":
+    manufacturer: "Canadian Solar"
+    model: "CS3W-400P"
+    technology: "Monocristalino"
+    power_stc: 400          # Potencia en STC (W)
+    
+    # Parámetros eléctricos en STC
+    electrical_stc:
+      isc: 10.13            # Corriente de cortocircuito (A)
+      voc: 48.7             # Tensión de circuito abierto (V)
+      impp: 9.78            # Corriente en punto de máxima potencia (A)
+      vmpp: 40.9            # Tensión en punto de máxima potencia (V)
+      
+    # Coeficientes de temperatura
+    temperature_coefficients:
+      power: -0.37          # %/°C
+      voltage: -0.29        # %/°C
+      current: 0.048        # %/°C
+      
+    # Condiciones de operación
+    operating_conditions:
+      temp_coefficient_isc: 0.048  # %/°C
+      noct: 42              # °C
+      temp_range: [-40, 85] # °C
+      
+    # Datos físicos
+    physical:
+      length: 2108          # mm
+      width: 1048           # mm
+      thickness: 40         # mm
+      weight: 22.5          # kg
+      
+    # Información adicional
+    warranty:
+      product: 12           # años
+      performance: 25       # años
+      
+    datasheet_url: "https://example.com/cs3w-400p.pdf"
+    
+  "Canadian Solar CS3W-450P":
+    manufacturer: "Canadian Solar"
+    model: "CS3W-450P"
+    technology: "Monocristalino"
+    power_stc: 450
+    
+    electrical_stc:
+      isc: 11.15
+      voc: 48.7
+      impp: 10.68
+      vmpp: 42.1
+      
+    temperature_coefficients:
+      power: -0.37
+      voltage: -0.29
+      current: 0.048
+      
+    operating_conditions:
+      temp_coefficient_isc: 0.048
+      noct: 42
+      temp_range: [-40, 85]
+      
+    physical:
+      length: 2108
+      width: 1048
+      thickness: 40
+      weight: 24.5
+
+  # Paneles Jinko Solar
+  "Jinko Solar JKM400M-72H":
+    manufacturer: "Jinko Solar"
+    model: "JKM400M-72H"
+    technology: "Monocristalino PERC"
+    power_stc: 400
+    
+    electrical_stc:
+      isc: 10.45
+      voc: 49.5
+      impp: 9.78
+      vmpp: 40.9
+      
+    temperature_coefficients:
+      power: -0.38
+      voltage: -0.28
+      current: 0.048
+      
+    operating_conditions:
+      temp_coefficient_isc: 0.048
+      noct: 44
+      temp_range: [-40, 85]
+      
+    physical:
+      length: 1956
+      width: 992
+      thickness: 40
+      weight: 22.0
+
+  "Jinko Solar JKM535M-72HL4-V":
+    manufacturer: "Jinko Solar"
+    model: "JKM535M-72HL4-V"
+    technology: "Monocristalino TOPCon"
+    power_stc: 535
+    
+    electrical_stc:
+      isc: 13.87
+      voc: 49.5
+      impp: 13.21
+      vmpp: 40.5
+      
+    temperature_coefficients:
+      power: -0.34
+      voltage: -0.25
+      current: 0.048
+      
+    operating_conditions:
+      temp_coefficient_isc: 0.048
+      noct: 43
+      temp_range: [-40, 85]
+
+  # Paneles Trina Solar
+  "Trina Solar TSM-400DE09":
+    manufacturer: "Trina Solar"
+    model: "TSM-400DE09"
+    technology: "Monocristalino PERC"
+    power_stc: 400
+    
+    electrical_stc:
+      isc: 10.35
+      voc: 48.4
+      impp: 9.87
+      vmpp: 40.6
+      
+    temperature_coefficients:
+      power: -0.37
+      voltage: -0.27
+      current: 0.048
+      
+    operating_conditions:
+      temp_coefficient_isc: 0.048
+      noct: 44
+      temp_range: [-40, 85]
+
+  # Panel personalizado (plantilla)
+  "Panel Personalizado":
+    manufacturer: "Personalizado"
+    model: "Definido por usuario"
+    technology: "Personalizado"
+    power_stc: 400
+    
+    electrical_stc:
+      isc: 10.0             # Usuario debe completar
+      voc: 48.0
+      impp: 9.5
+      vmpp: 42.1
+      
+    temperature_coefficients:
+      power: -0.40
+      voltage: -0.30
+      current: 0.05
+      
+    operating_conditions:
+      temp_coefficient_isc: 0.05
+      noct: 45
+      temp_range: [-40, 85]
+      
+    _editable: true         # Marca que todos los parámetros son editables
+
+# Metadatos y configuración
+metadata:
+  version: "1.0"
+  last_updated: "2025-06-30"
+  total_panels: 6
+  
+  # Parámetros que se pueden editar manualmente
+  editable_fields:
+    - "electrical_stc"
+    - "temperature_coefficients" 
+    - "operating_conditions.temp_coefficient_isc"
+    - "operating_conditions.noct"
+  
+  # Validaciones de rangos
+  parameter_ranges:
+    isc: [5.0, 20.0]        # A
+    voc: [30.0, 60.0]       # V
+    impp: [5.0, 20.0]       # A
+    vmpp: [30.0, 50.0]      # V
+    power_stc: [200, 700]   # W
+    temp_coefficient_isc: [0.01, 0.1]  # %/°C
+    noct: [35, 50]          # °C
+
+# Configuración para futura integración de archivos .pan
+pan_file_integration:
+  supported_formats: [".pan", ".pv"]
+  parser_settings:
+    encoding: "utf-8"
+    decimal_separator: "."
+    
+  # Mapeo de campos .pan a nuestra estructura
+  field_mapping:
+    "Isc": "electrical_stc.isc"
+    "Voc": "electrical_stc.voc"
+    "Imp": "electrical_stc.impp"
+    "Vmp": "electrical_stc.vmpp"
+    "Pnom": "power_stc"
+    "muISC": "temperature_coefficients.current"
+    "muVocSpec": "temperature_coefficients.voltage"
+    "muPmpReq": "temperature_coefficients.power"
+
+# Plantilla para formulario de panel personalizado
+custom_panel_form:
+  required_fields:
+    - manufacturer
+    - model
+    - power_stc
+    - electrical_stc.isc
+    - electrical_stc.voc
+    - electrical_stc.impp
+    - electrical_stc.vmpp
+    
+  optional_fields:
+    - technology
+    - temperature_coefficients
+    - operating_conditions
+    - physical
+    - warranty

@@ -1,9 +1,15 @@
-import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useProject } from "../context/ProjectContext"; // Ajusta la ruta según tu estructura
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Box, Typography, Button, Paper, Accordion, AccordionSummary, AccordionDetails, Alert, CircularProgress } from "@mui/material";
+import { Box, Typography, Button, Paper, Accordion, AccordionSummary, AccordionDetails, Alert, CircularProgress, Divider, Chip } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import CalculateIcon from '@mui/icons-material/Calculate';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
+import RefreshIcon from '@mui/icons-material/Refresh';
 
 interface SheetData {
   [key: string]: any[];
@@ -16,12 +22,73 @@ interface TableData {
 }
 
 function UploadExcelPage() {
-  const { projectName } = useParams();
+  const { projectName, setProjectName } = useProject();
+  const { projectName: urlProjectName } = useParams<{ projectName: string }>();
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
   const [tablesData, setTablesData] = useState<TableData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [hasExistingFile, setHasExistingFile] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Establecer el proyecto desde la URL si no está en el contexto
+  useEffect(() => {
+    if (!projectName && urlProjectName) {
+      setProjectName(urlProjectName);
+    }
+  }, [projectName, urlProjectName, setProjectName]);
+
+  // Usar el proyecto del contexto o de la URL
+  const currentProjectName = projectName || urlProjectName;
+
+  // Verificar si hay archivo existente al cargar el componente
+  useEffect(() => {
+    if (currentProjectName) {
+      checkForExistingFile();
+    }
+  }, [currentProjectName]);
+
+  const checkForExistingFile = async () => {
+    if (!currentProjectName) return;
+
+    setIsInitialLoading(true);
+    try {
+      // Intentar obtener datos del Excel existente
+      const response = await axios.get(`http://localhost:8000/get-excel-data/${currentProjectName}`);
+      
+      if (response.data && Object.keys(response.data).length > 0) {
+        // Hay datos existentes
+        setHasExistingFile(true);
+        const sheetData: SheetData = response.data;
+        const formattedTables = formatTableData(sheetData);
+        
+        if (formattedTables.length > 0) {
+          setTablesData(formattedTables);
+          setIsDataLoaded(true);
+          const totalRows = formattedTables.reduce((sum, table) => sum + table.rows.length, 0);
+          setMessage(`Archivo Excel cargado desde proyecto. ${totalRows} registros encontrados en ${formattedTables.length} hoja(s)`);
+        }
+      } else {
+        // No hay datos existentes
+        setHasExistingFile(false);
+        setShowUploadForm(true);
+      }
+    } catch (error: any) {
+      // Si no hay archivo o hay error, mostrar formulario de subida
+      setHasExistingFile(false);
+      setShowUploadForm(true);
+      
+      if (error.response?.status !== 400) {
+        console.warn("No se pudo cargar archivo existente:", error.message);
+      }
+    } finally {
+      setIsInitialLoading(false);
+    }
+  };
 
   const formatTableData = (sheetData: SheetData): TableData[] => {
     const tables: TableData[] = [];
@@ -61,17 +128,23 @@ function UploadExcelPage() {
       return;
     }
 
+    if (!currentProjectName) {
+      setMessage("No hay un proyecto seleccionado");
+      return;
+    }
+
     setIsLoading(true);
     setMessage("");
     setErrors([]);
     setTablesData([]);
+    setIsDataLoaded(false);
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
       // Subir archivo
-      const uploadResponse = await axios.post(`http://localhost:8000/upload-excel/${projectName}`, formData, {
+      const uploadResponse = await axios.post(`http://localhost:8000/upload-excel/${currentProjectName}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -83,12 +156,12 @@ function UploadExcelPage() {
       await new Promise((res) => setTimeout(res, 1000));
 
       // Validar contenido
-      const validationResponse = await axios.get(`http://localhost:8000/validate-content/${projectName}`);
+      const validationResponse = await axios.get(`http://localhost:8000/validate-content/${currentProjectName}`);
       setMessage(validationResponse.data.message);
       setErrors([]);
 
-      // Obtener datos para preview - CORREGIDO: usar el endpoint correcto
-      const previewResponse = await axios.get(`http://localhost:8000/get-excel-data/${projectName}`);
+      // Obtener datos para preview
+      const previewResponse = await axios.get(`http://localhost:8000/get-excel-data/${currentProjectName}`);
       console.log("Preview response:", previewResponse.data);
       
       const sheetData: SheetData = previewResponse.data;
@@ -100,13 +173,18 @@ function UploadExcelPage() {
       // Verificar si hay datos
       if (formattedTables.length === 0) {
         setMessage("No se encontraron datos válidos en el archivo Excel");
+        setIsDataLoaded(false);
       } else {
         const totalRows = formattedTables.reduce((sum, table) => sum + table.rows.length, 0);
         setMessage(`Archivo procesado exitosamente. ${totalRows} registros encontrados en ${formattedTables.length} hoja(s)`);
+        setIsDataLoaded(true);
+        setHasExistingFile(true);
+        setShowUploadForm(false); // Ocultar formulario después de subir exitosamente
       }
 
     } catch (error: any) {
       console.error("Error durante la carga:", error);
+      setIsDataLoaded(false);
       
       if (error.response) {
         console.error("Response data:", error.response.data);
@@ -141,32 +219,134 @@ function UploadExcelPage() {
     if (selectedFile) {
       setMessage("");
       setErrors([]);
-      setTablesData([]);
     }
   };
 
   // Función para refrescar los datos
   const handleRefreshData = async () => {
-    if (!projectName) return;
+    if (!currentProjectName) {
+      setMessage("No hay un proyecto seleccionado");
+      return;
+    }
     
     setIsLoading(true);
     try {
-      const previewResponse = await axios.get(`http://localhost:8000/get-excel-data/${projectName}`);
+      const previewResponse = await axios.get(`http://localhost:8000/get-excel-data/${currentProjectName}`);
       console.log("Refresh response:", previewResponse.data);
       
       const sheetData: SheetData = previewResponse.data;
       const formattedTables = formatTableData(sheetData);
       setTablesData(formattedTables);
       
-      const totalRows = formattedTables.reduce((sum, table) => sum + table.rows.length, 0);
-      setMessage(`Datos actualizados. ${totalRows} registros encontrados en ${formattedTables.length} hoja(s)`);
+      if (formattedTables.length === 0) {
+        setIsDataLoaded(false);
+        setMessage("No se encontraron datos válidos");
+      } else {
+        const totalRows = formattedTables.reduce((sum, table) => sum + table.rows.length, 0);
+        setMessage(`Datos actualizados. ${totalRows} registros encontrados en ${formattedTables.length} hoja(s)`);
+        setIsDataLoaded(true);
+      }
     } catch (error: any) {
       console.error("Error al refrescar datos:", error);
       setMessage("Error al cargar los datos. Verifica que el archivo haya sido procesado correctamente.");
+      setIsDataLoaded(false);
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Función para mostrar el formulario de subida
+  const handleShowUploadForm = () => {
+    setShowUploadForm(true);
+    setFile(null);
+    setMessage("");
+    setErrors([]);
+  };
+
+  // Función para cancelar la subida
+  const handleCancelUpload = () => {
+    setShowUploadForm(false);
+    setFile(null);
+    setMessage("");
+    setErrors([]);
+    
+    // Si había datos cargados, restaurar el mensaje
+    if (isDataLoaded) {
+      const totalRows = tablesData.reduce((sum, table) => sum + table.rows.length, 0);
+      setMessage(`Archivo Excel cargado desde proyecto. ${totalRows} registros encontrados en ${tablesData.length} hoja(s)`);
+    }
+  };
+
+  // Función para navegar a la página de cálculos
+  const handleNavigateToCalculations = () => {
+    if (currentProjectName) {
+      navigate(`/projects/${currentProjectName}/calculations`);
+    }
+  };
+
+  // Mostrar loading inicial
+  if (isInitialLoading) {
+    return (
+      <Box sx={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+        padding: 3,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <Paper elevation={6} sx={{ 
+          padding: 4, 
+          textAlign: 'center',
+          backgroundColor: '#1a1a2e',
+          borderRadius: '16px',
+          border: '1px solid #16213e',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+        }}>
+          <CircularProgress sx={{ color: '#e53e3e', marginBottom: 2 }} />
+          <Typography variant="h6" sx={{ color: '#fff', marginBottom: 1 }}>
+            Verificando archivo Excel...
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
+            Proyecto: {currentProjectName}
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
+
+  // Mostrar mensaje si no hay proyecto seleccionado
+  if (!currentProjectName) {
+    return (
+      <Box sx={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+        padding: 3,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <Paper elevation={6} sx={{ 
+          padding: 4, 
+          textAlign: 'center',
+          backgroundColor: '#1a1a2e',
+          borderRadius: '16px',
+          border: '1px solid #16213e',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+        }}>
+          <Typography variant="h5" sx={{ color: '#e53e3e', marginBottom: 2, fontSize: '48px' }}>
+            ⚠️
+          </Typography>
+          <Typography variant="h6" sx={{ color: '#fff', marginBottom: 2 }}>
+            No hay proyecto seleccionado
+          </Typography>
+          <Typography variant="body1" sx={{ color: '#a0a0a0' }}>
+            Por favor selecciona un proyecto antes de subir archivos Excel
+          </Typography>
+        </Paper>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ 
@@ -183,9 +363,10 @@ function UploadExcelPage() {
         textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
         marginBottom: 3
       }}>
-        📊 Carga de Excel - Proyecto: {projectName}
+        📊 Gestión de Excel - Proyecto: {currentProjectName}
       </Typography>
 
+      {/* Estado del archivo */}
       <Paper elevation={6} sx={{ 
         padding: 3, 
         marginBottom: 3,
@@ -194,95 +375,170 @@ function UploadExcelPage() {
         border: '1px solid #16213e',
         boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
       }}>
-        <Typography variant="h6" gutterBottom sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
-          📁 Seleccionar Archivo Excel
-        </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 2, flexWrap: 'wrap' }}>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleFileChange}
-            style={{ 
-              padding: '12px',
-              border: '2px solid #16213e',
-              borderRadius: '12px',
-              flexGrow: 1,
-              minWidth: '300px',
-              backgroundColor: '#0f0f23',
-              color: '#fff',
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-            }}
-          />
-          
-          <Button
-            variant="contained"
-            onClick={handleUpload}
-            disabled={!file || isLoading}
-            sx={{ 
-              minWidth: '140px',
-              background: 'linear-gradient(45deg, #e53e3e 30%, #ff6b6b 90%)',
-              color: 'white',
-              fontWeight: 'bold',
-              borderRadius: '25px',
-              boxShadow: '0 4px 15px rgba(229, 62, 62, 0.3)',
-              '&:hover': {
-                background: 'linear-gradient(45deg, #c53030 30%, #e53e3e 90%)',
-                boxShadow: '0 6px 20px rgba(229, 62, 62, 0.4)',
-                transform: 'translateY(-2px)',
-              },
-              '&:disabled': {
-                background: '#666',
-                color: '#ccc',
-              },
-              transition: 'all 0.3s ease'
-            }}
-          >
-            {isLoading ? (
-              <>
-                <CircularProgress size={20} sx={{ color: '#fff', marginRight: 1 }} />
-                Procesando...
-              </>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h6" sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
+              📁 Estado del Archivo Excel
+            </Typography>
+            
+            {hasExistingFile ? (
+              <Chip 
+                label="Archivo cargado"
+                icon={<CheckCircleIcon />}
+                sx={{ 
+                  backgroundColor: '#1b2d1b',
+                  color: '#81c784',
+                  border: '1px solid #4caf50',
+                  fontWeight: 'bold'
+                }}
+              />
             ) : (
-              '🚀 Subir Excel'
+              <Chip 
+                label="Sin archivo"
+                icon={<UploadFileIcon />}
+                sx={{ 
+                  backgroundColor: '#2d1b1b',
+                  color: '#ff9800',
+                  border: '1px solid #ff9800',
+                  fontWeight: 'bold'
+                }}
+              />
             )}
-          </Button>
+          </Box>
 
-          {tablesData.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+            {hasExistingFile && !showUploadForm && (
+              <>
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={handleRefreshData}
+                  disabled={isLoading}
+                  sx={{ 
+                    borderColor: '#4caf50',
+                    color: '#4caf50',
+                    '&:hover': {
+                      borderColor: '#388e3c',
+                      backgroundColor: 'rgba(76, 175, 80, 0.1)',
+                    },
+                  }}
+                >
+                  Actualizar
+                </Button>
+                
+                <Button
+                  variant="contained"
+                  startIcon={<UploadFileIcon />}
+                  onClick={handleShowUploadForm}
+                  sx={{ 
+                    background: 'linear-gradient(45deg, #ff9800 30%, #ffb74d 90%)',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    '&:hover': {
+                      background: 'linear-gradient(45deg, #f57c00 30%, #ff9800 90%)',
+                    },
+                  }}
+                >
+                  Reemplazar Archivo
+                </Button>
+              </>
+            )}
+
+            {showUploadForm && hasExistingFile && (
+              <Button
+                variant="outlined"
+                onClick={handleCancelUpload}
+                sx={{ 
+                  borderColor: '#666',
+                  color: '#666',
+                  '&:hover': {
+                    borderColor: '#888',
+                    backgroundColor: 'rgba(102, 102, 102, 0.1)',
+                  },
+                }}
+              >
+                Cancelar
+              </Button>
+            )}
+          </Box>
+        </Box>
+      </Paper>
+
+      {/* Formulario de subida (solo se muestra cuando es necesario) */}
+      {showUploadForm && (
+        <Paper elevation={6} sx={{ 
+          padding: 3, 
+          marginBottom: 3,
+          backgroundColor: '#1a1a2e',
+          borderRadius: '16px',
+          border: '1px solid #16213e',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+        }}>
+          <Typography variant="h6" gutterBottom sx={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 1 }}>
+            📁 {hasExistingFile ? 'Reemplazar Archivo Excel' : 'Subir Archivo Excel'}
+          </Typography>
+          
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, marginBottom: 2, flexWrap: 'wrap' }}>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+              style={{ 
+                padding: '12px',
+                border: '2px solid #16213e',
+                borderRadius: '12px',
+                flexGrow: 1,
+                minWidth: '300px',
+                backgroundColor: '#0f0f23',
+                color: '#fff',
+                fontSize: '14px',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+            />
+            
             <Button
-              variant="outlined"
-              onClick={handleRefreshData}
-              disabled={isLoading}
+              variant="contained"
+              onClick={handleUpload}
+              disabled={!file || isLoading}
               sx={{ 
-                minWidth: '120px',
-                borderColor: '#e53e3e',
-                color: '#e53e3e',
+                minWidth: '140px',
+                background: 'linear-gradient(45deg, #e53e3e 30%, #ff6b6b 90%)',
+                color: 'white',
                 fontWeight: 'bold',
                 borderRadius: '25px',
+                boxShadow: '0 4px 15px rgba(229, 62, 62, 0.3)',
                 '&:hover': {
-                  borderColor: '#c53030',
-                  backgroundColor: 'rgba(229, 62, 62, 0.1)',
+                  background: 'linear-gradient(45deg, #c53030 30%, #e53e3e 90%)',
+                  boxShadow: '0 6px 20px rgba(229, 62, 62, 0.4)',
+                  transform: 'translateY(-2px)',
                 },
                 '&:disabled': {
-                  borderColor: '#666',
+                  background: '#666',
                   color: '#ccc',
                 },
+                transition: 'all 0.3s ease'
               }}
             >
-              🔄 Refrescar
+              {isLoading ? (
+                <>
+                  <CircularProgress size={20} sx={{ color: '#fff', marginRight: 1 }} />
+                  Procesando...
+                </>
+              ) : (
+                `🚀 ${hasExistingFile ? 'Reemplazar' : 'Subir'} Excel`
+              )}
             </Button>
-          )}
-        </Box>
+          </Box>
 
-        {file && (
-          <Typography variant="body2" sx={{ color: '#a0a0a0', display: 'flex', alignItems: 'center', gap: 1 }}>
-            ✅ Archivo seleccionado: <strong style={{ color: '#e53e3e' }}>{file.name}</strong>
-            <span style={{ color: '#81c784' }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
-          </Typography>
-        )}
-      </Paper>
+          {file && (
+            <Typography variant="body2" sx={{ color: '#a0a0a0', display: 'flex', alignItems: 'center', gap: 1 }}>
+              ✅ Archivo seleccionado: <strong style={{ color: '#e53e3e' }}>{file.name}</strong>
+              <span style={{ color: '#81c784' }}>({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
+            </Typography>
+          )}
+        </Paper>
+      )}
 
       {/* Mensajes de estado */}
       {message && (
@@ -325,6 +581,63 @@ function UploadExcelPage() {
               </li>
             ))}
           </ul>
+        </Paper>
+      )}
+
+      {/* Botón para continuar a cálculos */}
+      {isDataLoaded && errors.length === 0 && (
+        <Paper elevation={6} sx={{ 
+          padding: 3, 
+          marginBottom: 3,
+          backgroundColor: '#1b2d1b',
+          borderRadius: '16px',
+          border: '2px solid #4caf50',
+          boxShadow: '0 8px 32px rgba(76, 175, 80, 0.3)',
+          textAlign: 'center'
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, marginBottom: 2 }}>
+            <CheckCircleIcon sx={{ color: '#4caf50', fontSize: '32px' }} />
+            <Typography variant="h6" sx={{ color: '#81c784', fontWeight: 'bold' }}>
+              ¡Datos listos para cálculo!
+            </Typography>
+          </Box>
+          
+          <Typography variant="body1" sx={{ color: '#a5d6a7', marginBottom: 3 }}>
+            Los datos del Excel han sido validados y están listos para los cálculos.
+            Puedes revisar los datos abajo o continuar directamente a la página de cálculos.
+          </Typography>
+
+          <Divider sx={{ backgroundColor: '#4caf50', marginY: 2 }} />
+
+          <Button
+            variant="contained"
+            size="large"
+            onClick={handleNavigateToCalculations}
+            startIcon={<CalculateIcon />}
+            endIcon={<NavigateNextIcon />}
+            sx={{ 
+              minWidth: '250px',
+              background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+              color: 'white',
+              fontWeight: 'bold',
+              fontSize: '16px',
+              borderRadius: '30px',
+              padding: '12px 30px',
+              boxShadow: '0 6px 20px rgba(76, 175, 80, 0.4)',
+              '&:hover': {
+                background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)',
+                boxShadow: '0 8px 25px rgba(76, 175, 80, 0.5)',
+                transform: 'translateY(-2px)',
+              },
+              transition: 'all 0.3s ease'
+            }}
+          >
+            Continuar a Cálculos
+          </Button>
+
+          <Typography variant="body2" sx={{ color: '#81c784', marginTop: 2, fontSize: '14px' }}>
+            💡 Tip: Puedes volver a esta página en cualquier momento para revisar o actualizar los datos
+          </Typography>
         </Paper>
       )}
 
@@ -522,7 +835,7 @@ function UploadExcelPage() {
       )}
 
       {/* Estado vacío */}
-      {!isLoading && tablesData.length === 0 && !message && (
+      {!isLoading && !isInitialLoading && tablesData.length === 0 && !message && !showUploadForm && (
         <Paper elevation={3} sx={{ 
           padding: 4, 
           textAlign: 'center', 
@@ -536,11 +849,24 @@ function UploadExcelPage() {
             📤
           </Typography>
           <Typography variant="h6" sx={{ color: '#fff', marginBottom: 1 }}>
-            Selecciona y sube un archivo Excel para comenzar
+            No hay archivos Excel en este proyecto
           </Typography>
-          <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-            Los datos se mostrarán aquí después de la validación
+          <Typography variant="body2" sx={{ color: '#a0a0a0', marginBottom: 3 }}>
+            Haz clic en "Reemplazar Archivo" para subir un Excel
           </Typography>
+          <Button
+            variant="contained"
+            startIcon={<UploadFileIcon />}
+            onClick={handleShowUploadForm}
+            sx={{ 
+              background: 'linear-gradient(45deg, #e53e3e 30%, #ff6b6b 90%)',
+              color: 'white',
+              fontWeight: 'bold',
+              borderRadius: '25px',
+            }}
+          >
+            Subir Excel
+          </Button>
         </Paper>
       )}
     </Box>

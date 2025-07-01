@@ -1,8 +1,159 @@
+# Propiedades de materiales conductores para cálculos eléctricos
+# Todas las resistividades están en Ω·m a 20°C
+
 materials:
   copper:
-    resistivity_20C: 1.72e-8  # Ω·m
-    temp_coefficient: 0.00393  # 1/°C
+    name: "Cobre electrolítico"
+    symbol: "Cu"
+    resistivity_20C: 0.0000172    # Ω·m a 20°C
+    temp_coefficient: 0.00393     # 1/°C (coeficiente de temperatura)
+    density: 8960                 # kg/m³
+    thermal_conductivity: 401     # W/(m·K)
+    melting_point: 1085           # °C
+    description: "Cobre electrolítico de alta pureza (99.9%)"
+    typical_applications:
+      - "Cables de potencia"
+      - "Conductores de strings DC"
+      - "Cables de conexión AC"
+      - "Barras colectoras"
+    temperature_range:
+      min: -40    # °C
+      max: 200    # °C
+    standards:
+      - "IEC 60228"
+      - "ASTM B3"
+      - "EN 60228"
 
   aluminum:
-    resistivity_20C: 2.82e-8  # Ω·m
-    temp_coefficient: 0.00403  # 1/°C
+    name: "Aluminio aleación 1350"
+    symbol: "Al"
+    resistivity_20C: 0.0000282    # Ω·m a 20°C
+    temp_coefficient: 0.00403     # 1/°C
+    density: 2705                 # kg/m³
+    thermal_conductivity: 237     # W/(m·K)
+    melting_point: 660            # °C
+    description: "Aleación de aluminio 1350 para conductores eléctricos"
+    typical_applications:
+      - "Cables de media tensión"
+      - "Líneas de transmisión"
+      - "Conductores aéreos"
+      - "Cables subterráneos MV"
+    temperature_range:
+      min: -40    # °C
+      max: 150    # °C
+    standards:
+      - "IEC 60228"
+      - "ASTM B230"
+      - "EN 60228"
+
+  silver:
+    name: "Plata pura"
+    symbol: "Ag"
+    resistivity_20C: 0.0000159    # Ω·m a 20°C
+    temp_coefficient: 0.0038      # 1/°C
+    density: 10490                # kg/m³
+    thermal_conductivity: 429     # W/(m·K)
+    melting_point: 962            # °C
+    description: "Plata de alta pureza (aplicaciones especiales)"
+    typical_applications:
+      - "Contactos eléctricos"
+      - "Aplicaciones de alta frecuencia"
+      - "Conductores especiales"
+    temperature_range:
+      min: -40    # °C
+      max: 180    # °C
+    note: "Material costoso, uso limitado a aplicaciones especiales"
+
+  copper_alloy:
+    name: "Aleación de cobre"
+    symbol: "CuSn"
+    resistivity_20C: 0.0000185    # Ω·m a 20°C (ligeramente mayor que cobre puro)
+    temp_coefficient: 0.00385     # 1/°C
+    density: 8800                 # kg/m³
+    thermal_conductivity: 380     # W/(m·K)
+    melting_point: 1050           # °C
+    description: "Aleación de cobre con pequeñas cantidades de otros metales"
+    typical_applications:
+      - "Cables marinos"
+      - "Aplicaciones corrosivas"
+      - "Conductores especializados"
+    temperature_range:
+      min: -40    # °C
+      max: 180    # °C
+
+# Factores de corrección adicionales
+correction_factors:
+  # Factor por pureza del material
+  purity_factors:
+    copper:
+      "99.9%": 1.00    # Referencia
+      "99.5%": 1.02    # 2% mayor resistividad
+      "99.0%": 1.05    # 5% mayor resistividad
+    aluminum:
+      "99.5%": 1.00    # Referencia para Al-1350
+      "99.0%": 1.03    # 3% mayor resistividad
+
+  # Factor por condiciones ambientales extremas
+  environmental_factors:
+    humidity_high: 1.01      # Alta humedad
+    salt_environment: 1.02   # Ambiente salino
+    industrial: 1.015        # Ambiente industrial
+
+# Rangos de temperatura operativa recomendados por tipo de aplicación
+application_temp_ranges:
+  dc_strings:
+    copper:
+      normal: [-20, 90]      # °C
+      extreme: [-40, 120]    # °C
+    aluminum:
+      normal: [-20, 75]      # °C
+      extreme: [-40, 100]    # °C
+      
+  ac_circuits:
+    copper:
+      normal: [-10, 70]      # °C
+      extreme: [-30, 90]     # °C
+    aluminum:
+      normal: [-10, 60]      # °C
+      extreme: [-30, 80]     # °C
+      
+  mv_circuits:
+    copper:
+      normal: [0, 80]        # °C
+      extreme: [-20, 100]    # °C
+    aluminum:
+      normal: [0, 70]        # °C
+      extreme: [-20, 90]     # °C
+
+# Información adicional para validación
+validation:
+  resistivity_ranges:
+    copper: [0.000015, 0.000020]     # Rango válido para cobre
+    aluminum: [0.000025, 0.000035]   # Rango válido para aluminio
+    
+  temp_coefficient_ranges:
+    copper: [0.0035, 0.0045]         # Rango válido
+    aluminum: [0.0036, 0.0045]       # Rango válido
+
+# Metadatos
+metadata:
+  version: "1.0"
+  last_updated: "2025-06-30"
+  description: "Propiedades de materiales conductores para cálculos de secciones de cable"
+  units:
+    resistivity: "Ω·m"
+    temperature: "°C"
+    density: "kg/m³"
+    thermal_conductivity: "W/(m·K)"
+  
+  references:
+    - "IEC 60228 - Conductors of insulated cables"
+    - "IEEE Std 835 - Power Cable Ampacity Tables"
+    - "CRC Handbook of Chemistry and Physics"
+    - "ASM Metals Handbook"
+  
+  notes:
+    - "Resistividades medidas a 20°C según estándares internacionales"
+    - "Coeficientes de temperatura son valores típicos para rangos normales"
+    - "Valores pueden variar según pureza y proceso de fabricación"
+    - "Para aplicaciones críticas verificar con especificaciones del fabricante"

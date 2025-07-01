@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useProject } from "../context/ProjectContext"; // Ajusta la ruta según tu estructura
 import "./HomePage.css";
 
 function HomePage() {
@@ -8,6 +9,7 @@ function HomePage() {
   const [existingProjects, setExistingProjects] = useState<string[]>([]);
   const [selectedProject, setSelectedProject] = useState("");
   const [mode, setMode] = useState<"create" | "select">("create");
+  const { setProjectName: setContextProjectName } = useProject();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,9 +36,10 @@ function HomePage() {
       }
     }
   
+    // Establecer el proyecto en el contexto antes de navegar
+    setContextProjectName(name);
     navigate(`/upload/${name}`);
   };
-  
 
   return (
     <div className="page-wrapper">

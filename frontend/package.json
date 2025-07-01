@@ -27,6 +27,7 @@
     "@mui/x-data-grid": "^8.5.3",
     "ag-grid-community": "^34.0.0",
     "ag-grid-react": "^34.0.0",
+    "axios": "^1.10.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.2",
