@@ -1,0 +1,9 @@
+{
+  "project_name": "demo2",
+  "base_norm": "string",
+  "modified_parameters": {
+    "additionalProp1": {}
+  },
+  "last_modified": "2025-07-02T15:58:47.787734",
+  "version": "1.0"
+}

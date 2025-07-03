@@ -228,3 +228,31 @@ custom_panel_form:
     - operating_conditions
     - physical
     - warranty
+
+  "CS6X-300M":
+    manufacturer: "Canadian Solar"
+    model: "CS6X-300M"
+    technology: "Policristalino"
+    power_stc: 300
+
+    electrical_stc:
+      isc: 8.5
+      voc: 44.5
+      impp: 8.0
+      vmpp: 37.5
+
+    temperature_coefficients:
+      power: -0.38
+      voltage: -0.29
+      current: 0.048
+
+    operating_conditions:
+      temp_coefficient_isc: 0.048
+      noct: 45
+      temp_range: [-40, 85]
+
+    physical:
+      length: 1956
+      width: 992
+      thickness: 40
+      weight: 20.0

@@ -1,78 +1,301 @@
-/* HomePage.css */
+/* HomePage profesional - Modo oscuro */
 
-body, html, #root {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    font-family: Arial, sans-serif;
-    background-color: #121212;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  
+.page-wrapper {
+  min-height: 100vh;
+  background: #0f172a;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.card {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 48px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+  max-width: 520px;
+  width: 100%;
+  border: 1px solid #334155;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 40px;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 24px;
+}
+
+.header h1 {
+  color: #f1f5f9;
+  font-size: 1.875rem;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.025em;
+}
+
+.header p {
+  color: #94a3b8;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+/* Form elements */
+.form-group {
+  margin-bottom: 28px;
+}
+
+.label {
+  display: block;
+  font-weight: 500;
+  color: #e2e8f0;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.text-input,
+.select-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: #0f172a;
+  box-sizing: border-box;
+  color: #f1f5f9;
+}
+
+.text-input:focus,
+.select-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.text-input.error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.text-input:disabled,
+.select-input:disabled {
+  background: #334155;
+  color: #64748b;
+  cursor: not-allowed;
+  border-color: #475569;
+}
+
+.hint {
+  display: block;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  margin-top: 6px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+/* Loading and status */
+.loading-projects {
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+  background: #334155;
+  border-radius: 6px;
+  border: 1px solid #475569;
+  font-size: 0.875rem;
+}
+
+.no-projects {
+  padding: 24px;
+  text-align: center;
+  background: #334155;
+  border-radius: 6px;
+  border: 1px solid #475569;
+}
+
+.no-projects p {
+  color: #94a3b8;
+  margin: 0 0 16px 0;
+  font-size: 0.875rem;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  text-decoration: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0;
+  font-weight: 500;
+}
+
+.link-button:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.refresh-button {
+  background: #334155;
+  border: 1px solid #475569;
+  color: #e2e8f0;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  margin-top: 12px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #475569;
+  border-color: #64748b;
+}
+
+.refresh-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Error messages */
+.error-message {
+  background: #450a0a;
+  color: #fca5a5;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border: 1px solid #7f1d1d;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.error-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-weight: bold;
+}
+
+/* Continue button */
+.continue-button {
+  width: 100%;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: none;
+  padding: 14px 24px;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  letter-spacing: 0.025em;
+}
+
+.continue-button:hover:not(.disabled) {
+  background: #e2e8f0;
+}
+
+.continue-button.disabled {
+  background: #64748b;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(15, 23, 42, 0.3);
+  border-top: 2px solid #0f172a;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.arrow {
+  font-size: 1rem;
+  transition: transform 0.2s ease;
+  margin-left: 4px;
+}
+
+.continue-button:hover:not(.disabled) .arrow {
+  transform: translateX(2px);
+}
+
+/* Info section */
+.info-section {
+  background: #334155;
+  padding: 24px;
+  border-radius: 6px;
+  border: 1px solid #475569;
+}
+
+.info-section h3 {
+  color: #f1f5f9;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.info-section ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #cbd5e1;
+}
+
+.info-section li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+  font-size: 0.875rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
   .page-wrapper {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    padding: 20px 16px;
   }
   
   .card {
-    background-color: #1e1e1e;
-    padding: 2rem 3rem;
-    border-radius: 12px;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
-    min-width: 400px;
-    max-width: 90%;
-    color: #e0e0e0;
-    text-align: center;
+    padding: 32px 24px;
+    margin: 0;
   }
   
-  h1 {
-    margin-bottom: 1.5rem;
+  .header h1 {
     font-size: 1.5rem;
-    color: #ffffff;
   }
   
-  .label {
-    margin-top: 1rem;
-    margin-bottom: 0.3rem;
-    font-weight: bold;
-    color: #cccccc;
-    text-align: left;
+  .continue-button {
+    font-size: 0.875rem;
+    padding: 12px 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 24px 20px;
   }
   
-  input, select {
-    width: 100%;
-    padding: 0.6rem;
-    background-color: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 6px;
-    color: #f0f0f0;
-    margin-bottom: 1rem;
-    font-size: 1rem;
+  .header h1 {
+    font-size: 1.375rem;
   }
   
-  button {
-    width: 100%;
-    padding: 0.7rem;
-    background-color: #007acc;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
+  .text-input,
+  .select-input {
+    padding: 10px 14px;
   }
-  
-  button:hover {
-    background-color: #005fa3;
-  }
-  
-  button:disabled {
-    background-color: #555;
-    cursor: not-allowed;
-  }
-  
+}

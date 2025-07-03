@@ -18,9 +18,11 @@ import {
   Chip,
   LinearProgress,
   Grid,
-  Divider,
+  Collapse,
+  IconButton,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
+import type { GridColDef } from "@mui/x-data-grid";
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import AssessmentIcon from '@mui/icons-material/Assessment';
@@ -28,6 +30,12 @@ import ElectricalServicesIcon from '@mui/icons-material/ElectricalServices';
 import PowerIcon from '@mui/icons-material/Power';
 import FlashOnIcon from '@mui/icons-material/FlashOn';
 import SummarizeIcon from '@mui/icons-material/Summarize';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import RefreshIcon from '@mui/icons-material/Refresh';
+
+// Configuración API
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // Interfaces para tipos de datos
 interface CalculationResult {
@@ -89,6 +97,7 @@ function CalculationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [isAnalysisExpanded, setIsAnalysisExpanded] = useState(false);
 
   // Establecer el proyecto desde la URL
   useEffect(() => {
@@ -99,11 +108,10 @@ function CalculationPage() {
 
   const currentProjectName = projectName || urlProjectName;
 
-  // Calcular progreso - CORREGIDO: solo cuenta el tab actual
+  // Calcular progreso - solo cuenta strings por ahora
   const getProgress = (): ProjectProgress => {
-    const calcArray = Object.values(calculations);
-    const completed = calcArray.filter(calc => calc?.status === 'success').length;
-    const total = 4; // Solo 4 tipos de cálculo (sin resumen)
+    const completed = calculations.strings?.status === 'success' ? 1 : 0;
+    const total = 1; // Solo strings por ahora
     const percentage = total > 0 ? (completed / total) * 100 : 0;
     
     return { completed, total, percentage };
@@ -111,55 +119,49 @@ function CalculationPage() {
 
   const progress = getProgress();
 
-  // Configuración de pestañas
+  // Configuración de pestañas - solo strings habilitada
   const tabs = [
     {
       label: "Strings DC",
       icon: <ElectricalServicesIcon />,
       description: "Cálculo de strings fotovoltaicos",
       circuitType: "dc_strings",
-      sheetName: "dc_string_circuits"
+      enabled: true
     },
     {
       label: "Nivel 1 DC",
       icon: <PowerIcon />,
       description: "Combinadores y concentradores DC",
       circuitType: "level_1_dc", 
-      sheetName: "dc_cn1_circuits"
+      enabled: false
     },
     {
       label: "Circuitos AC",
       icon: <ElectricalServicesIcon />,
       description: "Circuitos de corriente alterna",
       circuitType: "ac_circuits",
-      sheetName: "ac_circuits"
+      enabled: false
     },
     {
       label: "Media Tensión",
       icon: <FlashOnIcon />,
       description: "Circuitos de media tensión",
       circuitType: "mv_circuits",
-      sheetName: "mv_circuits"
+      enabled: false
     },
     {
       label: "Resumen",
       icon: <SummarizeIcon />,
       description: "Resumen ejecutivo y reportes",
       circuitType: "summary",
-      sheetName: null
+      enabled: true
     }
   ];
 
-  // Función para ejecutar cálculo específico
-  const executeCalculation = async (tabIndex: number) => {
+  // Función para ejecutar cálculo de strings
+  const executeStringCalculation = async () => {
     if (!currentProjectName) {
       setError("No hay proyecto seleccionado");
-      return;
-    }
-
-    const tab = tabs[tabIndex];
-    if (tab.circuitType === "summary") {
-      setActiveTab(4); // Ir al resumen
       return;
     }
 
@@ -168,24 +170,12 @@ function CalculationPage() {
     setSuccess("");
 
     try {
-      let response;
-      
-      // Adaptar la llamada según el tipo de circuito
-      if (norm === "IEC") {
-        response = await axios.get(
-          `http://localhost:8000/calculate-strings/${currentProjectName}?circuit_type=${tab.circuitType}`
-        );
-      } else {
-        // Para parámetros personalizados (implementar más tarde)
-        response = await axios.post(
-          `http://localhost:8000/calculate-strings/${currentProjectName}/custom?circuit_type=${tab.circuitType}`,
-          { /* parámetros personalizados */ }
-        );
-      }
+      const response = await axios.get(
+        `${API_BASE_URL}/calculations/calculate-strings/${currentProjectName}`
+      );
 
-      console.log(`Calculation response for ${tab.circuitType}:`, response.data);
+      console.log('String calculation response:', response.data);
       
-      // Actualizar estado del cálculo específico
       const calculationResult: CalculationResult = {
         results: response.data.results || response.data,
         summary: response.data.summary,
@@ -195,13 +185,13 @@ function CalculationPage() {
 
       setCalculations(prev => ({
         ...prev,
-        [getCalculationKey(tab.circuitType)]: calculationResult
+        strings: calculationResult
       }));
 
-      setSuccess(`Cálculo de ${tab.label} completado exitosamente`);
+      setSuccess(`Cálculo de strings completado exitosamente. ${calculationResult.results.length} strings calculados.`);
 
     } catch (error: any) {
-      console.error(`Error calculando ${tab.circuitType}:`, error);
+      console.error('Error calculando strings:', error);
       
       const calculationResult: CalculationResult = {
         results: [],
@@ -212,48 +202,26 @@ function CalculationPage() {
 
       setCalculations(prev => ({
         ...prev,
-        [getCalculationKey(tab.circuitType)]: calculationResult
+        strings: calculationResult
       }));
 
-      setError(`Error en cálculo de ${tab.label}: ${error.response?.data?.detail || error.message}`);
+      setError(`Error en cálculo de strings: ${error.response?.data?.detail || error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Mapear circuit_type a key del estado
-  const getCalculationKey = (circuitType: string): keyof CalculationState => {
-    switch (circuitType) {
-      case "dc_strings": return "strings";
-      case "level_1_dc": return "level1";
-      case "ac_circuits": return "ac";
-      case "mv_circuits": return "mv";
-      default: return "strings";
-    }
-  };
-
-  // Función para calcular todo
-  const calculateAll = async () => {
+  // Función para limpiar resultados
+  const clearResults = () => {
+    setCalculations({
+      strings: null,
+      level1: null,
+      ac: null,
+      mv: null,
+    });
     setError("");
     setSuccess("");
-    
-    for (let i = 0; i < tabs.length - 1; i++) { // Excluir resumen
-      await executeCalculation(i);
-      // Pequeña pausa entre cálculos
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    
-    setSuccess("Todos los cálculos completados");
   };
-
-  // Obtener estado del cálculo actual
-  const getCurrentCalculation = () => {
-    if (activeTab >= tabs.length - 1) return null; // Resumen no tiene cálculo
-    const tab = tabs[activeTab];
-    return calculations[getCalculationKey(tab.circuitType)];
-  };
-
-  const currentCalculation = getCurrentCalculation();
 
   // Función para volver
   const handleGoBack = () => {
@@ -269,7 +237,7 @@ function CalculationPage() {
     return (
       <Box sx={{ 
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+        background: 'linear-gradient(135deg, #2c2c2c 0%, #3a3a3a 50%, #424242 100%)',
         padding: 3,
         display: 'flex',
         alignItems: 'center',
@@ -278,16 +246,31 @@ function CalculationPage() {
         <Paper elevation={6} sx={{ 
           padding: 4, 
           textAlign: 'center',
-          backgroundColor: '#1a1a2e',
+          backgroundColor: '#3a3a3a',
           borderRadius: '16px',
-          border: '1px solid #16213e',
+          border: '1px solid #525252',
         }}>
-          <Typography variant="h5" sx={{ color: '#e53e3e', marginBottom: 2, fontSize: '48px' }}>
-            ⚠️
+          <Typography variant="h5" sx={{ color: '#ffa726', marginBottom: 2, fontSize: '48px' }}>
+            !
           </Typography>
           <Typography variant="h6" sx={{ color: '#fff', marginBottom: 2 }}>
             No hay proyecto seleccionado
           </Typography>
+          <Button
+            variant="contained"
+            onClick={() => navigate('/projects')}
+            sx={{ 
+              backgroundColor: '#666',
+              color: 'white',
+              fontWeight: 'bold',
+              borderRadius: '8px',
+              '&:hover': {
+                backgroundColor: '#555',
+              },
+            }}
+          >
+            Seleccionar Proyecto
+          </Button>
         </Paper>
       </Box>
     );
@@ -296,16 +279,16 @@ function CalculationPage() {
   return (
     <Box sx={{ 
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
+      background: 'linear-gradient(135deg, #2c2c2c 0%, #3a3a3a 50%, #424242 100%)',
       padding: 3, 
     }}>
       {/* Header del proyecto */}
       <Paper elevation={6} sx={{ 
         padding: 3, 
         marginBottom: 3,
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#3a3a3a',
         borderRadius: '16px',
-        border: '1px solid #16213e',
+        border: '1px solid #525252',
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -316,13 +299,13 @@ function CalculationPage() {
               alignItems: 'center',
               gap: 2
             }}>
-              ⚡ Cálculos Eléctricos
+              Cálculos Eléctricos
             </Typography>
             <Chip 
               label={currentProjectName}
               sx={{ 
-                backgroundColor: '#16213e',
-                color: '#81c784',
+                backgroundColor: '#525252',
+                color: '#e0e0e0',
                 fontWeight: 'bold',
                 fontSize: '14px'
               }}
@@ -337,8 +320,8 @@ function CalculationPage() {
                 onChange={(e) => setNorm(e.target.value as any)}
                 sx={{
                   color: '#fff',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#16213e' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#e53e3e' },
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#525252' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#666' },
                   '& .MuiSvgIcon-root': { color: '#fff' },
                 }}
               >
@@ -353,9 +336,9 @@ function CalculationPage() {
               startIcon={<ArrowBackIcon />}
               onClick={handleGoBack}
               sx={{ 
-                borderColor: '#e53e3e',
-                color: '#e53e3e',
-                '&:hover': { borderColor: '#c53030', backgroundColor: 'rgba(229, 62, 62, 0.1)' },
+                borderColor: '#666',
+                color: '#e0e0e0',
+                '&:hover': { borderColor: '#777', backgroundColor: 'rgba(255, 255, 255, 0.05)' },
               }}
             >
               Volver
@@ -366,10 +349,10 @@ function CalculationPage() {
         {/* Barra de progreso */}
         <Box sx={{ marginTop: 3 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 1 }}>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-              Progreso general del proyecto
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Progreso del proyecto
             </Typography>
-            <Typography variant="body2" sx={{ color: '#81c784', fontWeight: 'bold' }}>
+            <Typography variant="body2" sx={{ color: '#e0e0e0', fontWeight: 'bold' }}>
               {progress.completed}/{progress.total} secciones calculadas ({Math.round(progress.percentage)}%)
             </Typography>
           </Box>
@@ -379,62 +362,46 @@ function CalculationPage() {
             sx={{
               height: 8,
               borderRadius: 4,
-              backgroundColor: '#16213e',
+              backgroundColor: '#525252',
               '& .MuiLinearProgress-bar': {
-                backgroundColor: progress.percentage === 100 ? '#4caf50' : '#e53e3e',
+                backgroundColor: progress.percentage === 100 ? '#81c784' : '#ffb74d',
                 borderRadius: 4,
               },
             }}
           />
         </Box>
-
-        {/* Botón calcular todo */}
-        <Box sx={{ marginTop: 2, textAlign: 'center' }}>
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={<CalculateIcon />}
-            onClick={calculateAll}
-            disabled={isLoading}
-            sx={{ 
-              background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
-              color: 'white',
-              fontWeight: 'bold',
-              borderRadius: '25px',
-              padding: '12px 30px',
-              '&:hover': {
-                background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)',
-              },
-              '&:disabled': { background: '#666' },
-            }}
-          >
-            {isLoading ? 'Calculando...' : 'Calcular Todo'}
-          </Button>
-        </Box>
       </Paper>
 
       {/* Mensajes de estado */}
       {error && (
-        <Alert severity="error" sx={{ marginBottom: 2, backgroundColor: '#2d1b1b', color: '#ff6b6b' }}>
+        <Alert 
+          severity="error" 
+          sx={{ marginBottom: 2, backgroundColor: '#4a3a3a', color: '#ffab91' }}
+          onClose={() => setError("")}
+        >
           {error}
         </Alert>
       )}
 
       {success && (
-        <Alert severity="success" sx={{ marginBottom: 2, backgroundColor: '#1b2d1b', color: '#81c784' }}>
+        <Alert 
+          severity="success" 
+          sx={{ marginBottom: 2, backgroundColor: '#3a4a3a', color: '#a5d6a7' }}
+          onClose={() => setSuccess("")}
+        >
           {success}
         </Alert>
       )}
 
       {/* Pestañas principales */}
       <Paper elevation={6} sx={{ 
-        backgroundColor: '#1a1a2e',
+        backgroundColor: '#3a3a3a',
         borderRadius: '16px',
-        border: '1px solid #16213e',
+        border: '1px solid #525252',
         overflow: 'hidden'
       }}>
         {/* Navegación de pestañas */}
-        <Box sx={{ borderBottom: 1, borderColor: '#16213e' }}>
+        <Box sx={{ borderBottom: 1, borderColor: '#525252' }}>
           <Tabs
             value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
@@ -442,17 +409,21 @@ function CalculationPage() {
             scrollButtons="auto"
             sx={{
               '& .MuiTab-root': {
-                color: '#a0a0a0',
+                color: '#b0b0b0',
                 fontWeight: 'bold',
                 textTransform: 'none',
                 fontSize: '14px',
                 minHeight: '72px',
                 '&.Mui-selected': {
-                  color: '#e53e3e',
+                  color: '#ffb74d',
+                },
+                '&.Mui-disabled': {
+                  color: '#666',
+                  opacity: 0.5,
                 },
               },
               '& .MuiTabs-indicator': {
-                backgroundColor: '#e53e3e',
+                backgroundColor: '#ffb74d',
                 height: 3,
               },
             }}
@@ -464,24 +435,27 @@ function CalculationPage() {
               return (
                 <Tab
                   key={index}
+                  disabled={!tab.enabled}
                   icon={tab.icon}
                   label={
                     <Box sx={{ textAlign: 'center' }}>
                       <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                         {tab.label}
+                        {!tab.enabled && " (Próximamente)"}
                       </Typography>
-                      <Typography variant="caption" sx={{ color: '#666', display: 'block' }}>
+                      <Typography variant="caption" sx={{ color: '#888', display: 'block' }}>
                         {tab.description}
                       </Typography>
                       {status && (
                         <Chip
                           size="small"
-                          label={status === 'success' ? '✅' : status === 'error' ? '❌' : '⏳'}
+                          label={status === 'success' ? 'Calculado' : status === 'error' ? 'Error' : 'Calculando'}
                           sx={{ 
                             marginTop: 0.5,
                             height: 16,
                             fontSize: '10px',
-                            backgroundColor: status === 'success' ? '#1b2d1b' : status === 'error' ? '#2d1b1b' : '#2d2416',
+                            backgroundColor: status === 'success' ? '#3a4a3a' : status === 'error' ? '#4a3a3a' : '#4a4a3a',
+                            color: status === 'success' ? '#a5d6a7' : status === 'error' ? '#ffab91' : '#ffcc80',
                           }}
                         />
                       )}
@@ -497,15 +471,20 @@ function CalculationPage() {
         {/* Contenido de las pestañas */}
         {tabs.map((tab, index) => (
           <TabPanel key={index} value={activeTab} index={index}>
-            {index < tabs.length - 1 ? (
-              // Pestañas de cálculo
-              <CalculationTabContent
-                tab={tab}
-                calculation={calculations[getCalculationKey(tab.circuitType)]}
-                onCalculate={() => executeCalculation(index)}
+            {index === 0 ? (
+              // Pestaña de strings (habilitada)
+              <StringsTabContent
+                calculation={calculations.strings}
+                onCalculate={executeStringCalculation}
+                onClear={clearResults}
                 isLoading={isLoading}
                 norm={norm}
+                isAnalysisExpanded={isAnalysisExpanded}
+                setIsAnalysisExpanded={setIsAnalysisExpanded}
               />
+            ) : index < tabs.length - 1 ? (
+              // Pestañas de otros cálculos (deshabilitadas)
+              <DisabledTabContent tab={tab} />
             ) : (
               // Pestaña de resumen
               <SummaryTabContent
@@ -521,90 +500,395 @@ function CalculationPage() {
   );
 }
 
-// Componente para tabla de resultados de strings DC
+// Mapear circuit_type a key del estado
+const getCalculationKey = (circuitType: string): keyof CalculationState => {
+  switch (circuitType) {
+    case "dc_strings": return "strings";
+    case "level_1_dc": return "level1";
+    case "ac_circuits": return "ac";
+    case "mv_circuits": return "mv";
+    default: return "strings";
+  }
+};
+
+// Componente para pestañas deshabilitadas
+function DisabledTabContent({ tab }: { tab: any }) {
+  return (
+    <Paper sx={{ 
+      padding: 4, 
+      textAlign: 'center',
+      backgroundColor: '#525252',
+      border: '1px solid #666'
+    }}>
+      <Typography variant="h6" sx={{ color: '#b0b0b0', marginBottom: 2, fontSize: '48px' }}>
+        🚧
+      </Typography>
+      <Typography variant="h6" sx={{ color: '#fff', marginBottom: 1 }}>
+        {tab.label} - Próximamente
+      </Typography>
+      <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+        Esta funcionalidad está en desarrollo y estará disponible en futuras versiones.
+      </Typography>
+    </Paper>
+  );
+}
+
+// Componente principal para la pestaña de strings
+interface StringsTabContentProps {
+  calculation: CalculationResult | null;
+  onCalculate: () => void;
+  onClear: () => void;
+  isLoading: boolean;
+  norm: string;
+  isAnalysisExpanded: boolean;
+  setIsAnalysisExpanded: (expanded: boolean) => void;
+}
+
+function StringsTabContent({ 
+  calculation, 
+  onCalculate, 
+  onClear, 
+  isLoading, 
+  norm,
+  isAnalysisExpanded,
+  setIsAnalysisExpanded 
+}: StringsTabContentProps) {
+  return (
+    <Box>
+      {/* Header de la pestaña */}
+      <Box sx={{ marginBottom: 3 }}>
+        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 'bold', marginBottom: 1 }}>
+          <ElectricalServicesIcon sx={{ marginRight: 1, verticalAlign: 'middle' }} />
+          Cálculo de Strings DC
+        </Typography>
+        <Typography variant="body1" sx={{ color: '#b0b0b0' }}>
+          Cálculo de corrientes, secciones de cable y caídas de tensión para strings fotovoltaicos según normativa {norm}
+        </Typography>
+      </Box>
+
+      {/* Panel de control */}
+      <Paper sx={{ 
+        padding: 3, 
+        marginBottom: 3,
+        backgroundColor: '#525252',
+        border: '1px solid #666'
+      }}>
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={4}>
+            <Typography variant="body2" sx={{ color: '#b0b0b0', marginBottom: 1 }}>
+              Normativa aplicable:
+            </Typography>
+            <Chip 
+              label={`Normativa ${norm}`}
+              sx={{ 
+                backgroundColor: '#666',
+                color: '#fff',
+                fontWeight: 'bold',
+              }}
+            />
+          </Grid>
+
+          <Grid item xs={12} md={8}>
+            <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+              {calculation && (
+                <Button
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={onClear}
+                  sx={{ 
+                    borderColor: '#888',
+                    color: '#e0e0e0',
+                    '&:hover': { borderColor: '#999', backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                  }}
+                >
+                  Limpiar
+                </Button>
+              )}
+              
+              <Button
+                variant="contained"
+                onClick={onCalculate}
+                disabled={isLoading}
+                startIcon={isLoading ? <CircularProgress size={20} /> : <CalculateIcon />}
+                sx={{ 
+                  backgroundColor: '#666',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  borderRadius: '8px',
+                  '&:hover': {
+                    backgroundColor: '#777',
+                  },
+                  '&:disabled': { backgroundColor: '#444' },
+                }}
+              >
+                {isLoading ? 'Calculando...' : 'Calcular Strings'}
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* Resultados */}
+      {calculation && (
+        <Paper sx={{ 
+          backgroundColor: '#525252',
+          border: '1px solid #666',
+          overflow: 'hidden'
+        }}>
+          {calculation.status === 'success' ? (
+            <Box>
+              {/* Header de resultados */}
+              <Box sx={{ padding: 3, borderBottom: '1px solid #666' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="h6" sx={{ color: '#a5d6a7' }}>
+                    Resultados del Cálculo
+                  </Typography>
+                  <Chip 
+                    label={`${calculation.results?.length || 0} strings calculados`}
+                    sx={{ 
+                      backgroundColor: '#3a4a3a',
+                      color: '#a5d6a7',
+                      fontWeight: 'bold',
+                    }}
+                  />
+                </Box>
+                <Typography variant="body2" sx={{ color: '#b0b0b0', marginTop: 1 }}>
+                  Calculado el {new Date(calculation.timestamp).toLocaleString()}
+                </Typography>
+              </Box>
+              
+              {/* Tabla de resultados */}
+              <Box sx={{ padding: 3 }}>
+                <StringsResultsTable results={calculation.results} />
+              </Box>
+              
+              {/* Análisis crítico expandible */}
+              {calculation.results && calculation.results.length > 0 && (
+                <Box>
+                  <Box 
+                    sx={{ 
+                      padding: 2, 
+                      borderTop: '1px solid #666',
+                      backgroundColor: '#666',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                    onClick={() => setIsAnalysisExpanded(!isAnalysisExpanded)}
+                  >
+                    <Typography variant="h6" sx={{ color: '#ffcc80' }}>
+                      Análisis Crítico
+                    </Typography>
+                    <IconButton sx={{ color: '#ffcc80' }}>
+                      {isAnalysisExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </IconButton>
+                  </Box>
+                  
+                  <Collapse in={isAnalysisExpanded}>
+                    <Box sx={{ padding: 3 }}>
+                      <StringsCriticalAnalysis results={calculation.results} />
+                    </Box>
+                  </Collapse>
+                </Box>
+              )}
+            </Box>
+          ) : calculation.status === 'error' ? (
+            <Box sx={{ padding: 3 }}>
+              <Alert severity="error" sx={{ backgroundColor: '#4a3a3a', color: '#ffab91' }}>
+                <Typography variant="body1" sx={{ fontWeight: 'bold', marginBottom: 1 }}>
+                  Error en el cálculo:
+                </Typography>
+                <Typography variant="body2">
+                  {calculation.error}
+                </Typography>
+              </Alert>
+            </Box>
+          ) : null}
+        </Paper>
+      )}
+
+      {/* Estado vacío */}
+      {!calculation && (
+        <Paper sx={{ 
+          padding: 4, 
+          textAlign: 'center',
+          backgroundColor: '#525252',
+          border: '1px solid #666'
+        }}>
+          <Typography variant="h6" sx={{ color: '#b0b0b0', marginBottom: 2, fontSize: '48px' }}>
+            ⚡
+          </Typography>
+          <Typography variant="h6" sx={{ color: '#fff', marginBottom: 1 }}>
+            Listo para calcular strings DC
+          </Typography>
+          <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+            Los cálculos incluyen corrientes nominales, secciones de cable, caídas de tensión y pérdidas Joule
+          </Typography>
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
+// Componente para tabla de resultados de strings DC - MEJORADO
 function StringsResultsTable({ results }: { results: any[] }) {
-  const columns = [
+  const columns: GridColDef[] = [
     { 
       field: "string_id", 
       headerName: "String ID", 
       width: 150,
-      pinned: 'left' as const,
-      cellStyle: { fontWeight: 'bold', color: '#e53e3e' }
+      pinned: 'left',
+      renderCell: (params) => (
+        <Typography sx={{ fontWeight: 'bold', color: '#ffb74d' }}>
+          {params.value}
+        </Typography>
+      )
     },
     { 
       field: "length_total_m", 
       headerName: "Longitud (m)", 
-      width: 120,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(2)} m` : 'N/A'
+      width: 130,
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(2)}` : 'N/A',
+      renderCell: (params) => (
+        <Typography sx={{ fontFamily: 'monospace' }}>
+          {params.formattedValue} m
+        </Typography>
+      )
     },
     { 
       field: "i_nominal", 
       headerName: "I Nominal (A)", 
-      width: 120,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(2)} A` : 'N/A'
+      width: 130,
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(2)}` : 'N/A',
+      renderCell: (params) => (
+        <Typography sx={{ fontFamily: 'monospace' }}>
+          {params.formattedValue} A
+        </Typography>
+      )
     },
     { 
       field: "i_adjusted", 
       headerName: "I Ajustada (A)", 
-      width: 130,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(2)} A` : 'N/A'
+      width: 140,
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(2)}` : 'N/A',
+      renderCell: (params) => (
+        <Typography sx={{ fontFamily: 'monospace', color: '#a5d6a7' }}>
+          {params.formattedValue} A
+        </Typography>
+      )
     },
     { 
       field: "s_teorica_mm2", 
       headerName: "S Teórica (mm²)", 
-      width: 140,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(2)} mm²` : 'N/A'
+      width: 150,
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(3)}` : 'N/A',
+      renderCell: (params) => (
+        <Typography sx={{ fontFamily: 'monospace', fontSize: '12px' }}>
+          {params.formattedValue} mm²
+        </Typography>
+      )
     },
     { 
       field: "s_comercial_mm2", 
       headerName: "S Comercial (mm²)", 
-      width: 150,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(0)} mm²` : 'N/A',
-      cellStyle: { fontWeight: 'bold', color: '#4caf50' }
+      width: 160,
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(0)}` : 'N/A',
+      renderCell: (params) => (
+        <Chip
+          label={`${params.formattedValue} mm²`}
+          size="small"
+          sx={{ 
+            backgroundColor: '#3a4a3a',
+            color: '#a5d6a7',
+            fontWeight: 'bold',
+            fontFamily: 'monospace'
+          }}
+        />
+      )
     },
     { 
       field: "v_drop_real_pct", 
       headerName: "Caída V (%)", 
-      width: 120,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(3)}%` : 'N/A',
-      cellStyle: (params: any) => {
+      width: 130,
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(3)}` : 'N/A',
+      renderCell: (params) => {
         const value = params.row?.v_drop_real_pct;
-        if (value != null && value > 1.5) return { backgroundColor: '#2d1b1b', color: '#ff6b6b', fontWeight: 'bold' };
-        return { color: '#4caf50', fontWeight: 'bold' };
+        const isOverLimit = value != null && value > 1.5;
+        return (
+          <Typography sx={{ 
+            fontFamily: 'monospace',
+            fontWeight: 'bold',
+            color: isOverLimit ? '#ffab91' : '#a5d6a7',
+            backgroundColor: isOverLimit ? 'rgba(255, 171, 145, 0.1)' : 'transparent',
+            padding: '2px 6px',
+            borderRadius: '4px'
+          }}>
+            {params.formattedValue}%
+          </Typography>
+        );
       }
     },
     { 
       field: "v_drop_real_volts", 
       headerName: "Caída V (V)", 
-      width: 120,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(2)} V` : 'N/A'
-    },
-    { 
-      field: "joule_losses_w", 
-      headerName: "Pérdidas (W)", 
       width: 130,
-      valueFormatter: (value: any) => value != null ? `${Number(value).toFixed(2)} W` : 'N/A'
+      type: 'number',
+      valueFormatter: (value) => value != null ? `${Number(value).toFixed(2)}` : 'N/A',
+      renderCell: (params) => (
+        <Typography sx={{ fontFamily: 'monospace' }}>
+          {params.formattedValue} V
+        </Typography>
+      )
     },
     { 
       field: "voltage_status", 
       headerName: "Estado", 
-      width: 100,
-      cellStyle: (params: any) => {
-        const value = params.row?.voltage_status;
+      width: 120,
+      renderCell: (params) => {
+        const value = params.value;
+        let color, bgColor, label;
+        
         switch(value) {
-          case 'OK': return { color: '#4caf50', fontWeight: 'bold' };
-          case 'WARNING': return { color: '#ff9800', fontWeight: 'bold' };
-          case 'CRITICAL': return { color: '#f44336', fontWeight: 'bold' };
-          default: return { color: '#666' };
+          case 'OK':
+            color = '#a5d6a7';
+            bgColor = 'rgba(165, 214, 167, 0.1)';
+            label = 'OK';
+            break;
+          case 'WARNING':
+            color = '#ffcc80';
+            bgColor = 'rgba(255, 204, 128, 0.1)';
+            label = 'Warning';
+            break;
+          case 'CRITICAL':
+            color = '#ffab91';
+            bgColor = 'rgba(255, 171, 145, 0.1)';
+            label = 'Critical';
+            break;
+          default:
+            color = '#888';
+            bgColor = 'transparent';
+            label = 'Unknown';
         }
-      },
-      valueFormatter: (value: any) => {
-        switch(value) {
-          case 'OK': return '✅ OK';
-          case 'WARNING': return '⚠️ Warning';
-          case 'CRITICAL': return '❌ Critical';
-          default: return '❓ Unknown';
-        }
+        
+        return (
+          <Chip
+            label={label}
+            size="small"
+            sx={{ 
+              backgroundColor: bgColor,
+              color: color,
+              fontWeight: 'bold',
+              border: `1px solid ${color}`
+            }}
+          />
+        );
       }
     }
   ];
@@ -612,109 +896,150 @@ function StringsResultsTable({ results }: { results: any[] }) {
   const validResults = results.filter(result => !result.error);
   const errorResults = results.filter(result => result.error);
 
-  // Debug: ver qué datos están llegando
-  console.log("StringsResultsTable - Datos recibidos:", results);
-  console.log("StringsResultsTable - Primer resultado válido:", validResults[0]);
+  // Estadísticas rápidas
+  const stats = {
+    total: validResults.length,
+    overLimit: validResults.filter(r => r.v_drop_real_pct > 1.5).length,
+    avgVoltDrop: validResults.length > 0 
+      ? (validResults.reduce((sum, r) => sum + (r.v_drop_real_pct || 0), 0) / validResults.length).toFixed(3)
+      : '0',
+    totalLosses: validResults.reduce((sum, r) => sum + (r.joule_losses_w || 0), 0).toFixed(2)
+  };
 
   return (
     <Box>
+      {/* Estadísticas rápidas */}
+      <Grid container spacing={2} sx={{ marginBottom: 3 }}>
+        <Grid item xs={6} md={3}>
+          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#666' }}>
+            <Typography variant="h6" sx={{ color: '#a5d6a7' }}>
+              {stats.total}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Total Strings
+            </Typography>
+          </Paper>
+        </Grid>
+        
+        <Grid item xs={6} md={3}>
+          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: stats.overLimit > 0 ? '#4a3a3a' : '#666' }}>
+            <Typography variant="h6" sx={{ color: stats.overLimit > 0 ? '#ffab91' : '#a5d6a7' }}>
+              {stats.overLimit}
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Fuera de Límite
+            </Typography>
+          </Paper>
+        </Grid>
+
+        <Grid item xs={6} md={3}>
+          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#666' }}>
+            <Typography variant="h6" sx={{ color: '#ffcc80' }}>
+              {stats.avgVoltDrop}%
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Caída Promedio
+            </Typography>
+          </Paper>
+        </Grid>
+
+        <Grid item xs={6} md={3}>
+          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#666' }}>
+            <Typography variant="h6" sx={{ color: '#ffb74d' }}>
+              {stats.totalLosses} W
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Pérdidas Totales
+            </Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
       {/* Tabla principal */}
-      <Box sx={{ height: 400, width: '100%', marginBottom: 2 }}>
+      <Box sx={{ height: 500, width: '100%', marginBottom: 2 }}>
         <DataGrid
           rows={validResults.map((row, index) => ({ ...row, id: index }))}
           columns={columns}
           initialState={{
-            pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            pagination: { paginationModel: { pageSize: 25, page: 0 } },
           }}
-          pageSizeOptions={[5, 10, 25, 50]}
+          pageSizeOptions={[10, 25, 50, 100]}
           checkboxSelection
-          disableSelectionOnClick
+          disableRowSelectionOnClick
           sx={{
-            backgroundColor: '#1a1a2e',
+            backgroundColor: '#3a3a3a',
             color: '#eee',
-            border: '1px solid #16213e',
+            border: '1px solid #525252',
             borderRadius: '12px',
             
-            // Headers de columnas - MEJORADO
+            // Headers mejorados
             '& .MuiDataGrid-columnHeaders': {
-              backgroundColor: '#0f3460',
+              backgroundColor: '#666',
               color: '#ffffff !important',
               fontWeight: 'bold',
               fontSize: '14px',
-              borderBottom: '2px solid #e53e3e',
-              '& .MuiDataGrid-columnHeader': {
-                backgroundColor: '#0f3460',
-                color: '#ffffff !important',
-              },
-              '& .MuiDataGrid-columnHeaderTitle': {
-                color: '#ffffff !important',
-                fontWeight: 'bold',
-                fontSize: '14px',
-              },
+              borderBottom: '2px solid #ffb74d',
+            },
+            '& .MuiDataGrid-columnHeader': {
+              backgroundColor: '#666',
+              color: '#ffffff !important',
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
+              color: '#ffffff !important',
+              fontWeight: 'bold',
             },
             
-            // Separadores y iconos
+            // Iconos y controles
             '& .MuiDataGrid-columnSeparator': {
               color: '#fff !important',
               visibility: 'visible',
             },
-            '& .MuiDataGrid-iconButtonContainer': {
-              '& .MuiIconButton-root': {
-                color: '#fff !important',
-              },
-            },
-            '& .MuiDataGrid-sortIcon': {
+            '& .MuiDataGrid-iconButtonContainer .MuiIconButton-root': {
               color: '#fff !important',
             },
-            '& .MuiDataGrid-filterIcon': {
-              color: '#fff !important',
-            },
-            '& .MuiDataGrid-menuIcon': {
+            '& .MuiDataGrid-sortIcon, & .MuiDataGrid-filterIcon, & .MuiDataGrid-menuIcon': {
               color: '#fff !important',
             },
             
-            // Celdas de datos
+            // Celdas
             '& .MuiDataGrid-cell': {
-              borderBottom: '1px solid #16213e',
+              borderBottom: '1px solid #525252',
+              borderRight: '1px solid #525252',
               color: '#e0e0e0',
-              borderRight: '1px solid #16213e',
             },
             
             // Filas
             '& .MuiDataGrid-row': {
-              backgroundColor: '#1a1a2e',
+              backgroundColor: '#3a3a3a',
               '&:hover': {
-                backgroundColor: '#0f3460 !important',
+                backgroundColor: '#666 !important',
               },
               '&.Mui-selected': {
-                backgroundColor: '#e53e3e !important',
+                backgroundColor: 'rgba(255, 183, 77, 0.2) !important',
                 '&:hover': {
-                  backgroundColor: '#c53030 !important',
+                  backgroundColor: 'rgba(255, 183, 77, 0.3) !important',
                 },
               },
             },
             
             // Footer
             '& .MuiDataGrid-footerContainer': {
-              backgroundColor: '#16213e',
+              backgroundColor: '#525252',
               color: '#fff',
-              borderTop: '2px solid #0f3460',
-              '& .MuiTablePagination-root': {
-                color: '#fff',
-              },
-              '& .MuiTablePagination-selectIcon': {
-                color: '#fff',
-              },
-              '& .MuiIconButton-root': {
-                color: '#fff',
-              },
+              borderTop: '2px solid #666',
+            },
+            '& .MuiTablePagination-root': {
+              color: '#fff',
+            },
+            '& .MuiTablePagination-selectIcon, & .MuiIconButton-root': {
+              color: '#fff',
             },
             
             // Checkboxes
             '& .MuiCheckbox-root': {
-              color: '#e53e3e',
+              color: '#ffb74d',
               '&.Mui-checked': { 
-                color: '#e53e3e',
+                color: '#ffb74d',
               },
             },
             
@@ -725,10 +1050,10 @@ function StringsResultsTable({ results }: { results: any[] }) {
                 height: '8px',
               },
               '&::-webkit-scrollbar-track': {
-                backgroundColor: '#16213e',
+                backgroundColor: '#525252',
               },
               '&::-webkit-scrollbar-thumb': {
-                backgroundColor: '#e53e3e',
+                backgroundColor: '#ffb74d',
                 borderRadius: '4px',
               },
             },
@@ -738,18 +1063,18 @@ function StringsResultsTable({ results }: { results: any[] }) {
 
       {/* Mostrar errores si los hay */}
       {errorResults.length > 0 && (
-        <Alert severity="warning" sx={{ backgroundColor: '#2d2416', color: '#ffb74d', marginTop: 2 }}>
-          <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
-            ⚠️ {errorResults.length} strings con errores:
+        <Alert severity="warning" sx={{ backgroundColor: '#4a4a3a', color: '#ffcc80' }}>
+          <Typography variant="body2" sx={{ fontWeight: 'bold', marginBottom: 1 }}>
+            {errorResults.length} strings con errores:
           </Typography>
-          {errorResults.slice(0, 3).map((err, i) => (
+          {errorResults.slice(0, 5).map((err, i) => (
             <Typography key={i} variant="body2" sx={{ fontSize: '12px', marginLeft: 2 }}>
               • {err.string_id}: {err.error}
             </Typography>
           ))}
-          {errorResults.length > 3 && (
+          {errorResults.length > 5 && (
             <Typography variant="body2" sx={{ fontSize: '12px', marginLeft: 2, fontStyle: 'italic' }}>
-              ... y {errorResults.length - 3} más
+              ... y {errorResults.length - 5} más
             </Typography>
           )}
         </Alert>
@@ -758,276 +1083,192 @@ function StringsResultsTable({ results }: { results: any[] }) {
   );
 }
 
-// Componente para análisis crítico de strings
+// Componente para análisis crítico mejorado
 function StringsCriticalAnalysis({ results }: { results: any[] }) {
   const validResults = results.filter(r => !r.error && r.v_drop_real_pct !== null);
   
-  if (validResults.length === 0) return null;
+  if (validResults.length === 0) {
+    return (
+      <Typography variant="body1" sx={{ color: '#b0b0b0', textAlign: 'center' }}>
+        No hay datos válidos para análisis
+      </Typography>
+    );
+  }
 
-  // Encontrar string más crítico por longitud
-  const longestString = validResults.reduce((max, curr) => 
-    curr.length_total_m > max.length_total_m ? curr : max
-  );
-
-  // Encontrar string con mayor caída de tensión
-  const highestVoltageDropString = validResults.reduce((max, curr) => 
-    curr.v_drop_real_pct > max.v_drop_real_pct ? curr : max
-  );
-
-  // Contar strings fuera de límite
-  const stringsOverLimit = validResults.filter(r => r.v_drop_real_pct > 1.5).length;
+  // Análisis detallado
+  const analysis = {
+    longest: validResults.reduce((max, curr) => 
+      curr.length_total_m > max.length_total_m ? curr : max
+    ),
+    shortest: validResults.reduce((min, curr) => 
+      curr.length_total_m < min.length_total_m ? curr : min
+    ),
+    highestVoltDrop: validResults.reduce((max, curr) => 
+      curr.v_drop_real_pct > max.v_drop_real_pct ? curr : max
+    ),
+    lowestVoltDrop: validResults.reduce((min, curr) => 
+      curr.v_drop_real_pct < min.v_drop_real_pct ? curr : min
+    ),
+    highestLosses: validResults.reduce((max, curr) => 
+      curr.joule_losses_w > max.joule_losses_w ? curr : max
+    ),
+    overLimitStrings: validResults.filter(r => r.v_drop_real_pct > 1.5),
+    avgLength: (validResults.reduce((sum, r) => sum + r.length_total_m, 0) / validResults.length).toFixed(2),
+    avgVoltDrop: (validResults.reduce((sum, r) => sum + r.v_drop_real_pct, 0) / validResults.length).toFixed(3),
+    totalPowerLoss: validResults.reduce((sum, r) => sum + r.joule_losses_w, 0).toFixed(2)
+  };
 
   return (
-    <Box sx={{ marginTop: 2 }}>
-      <Typography variant="h6" sx={{ color: '#ff9800', marginBottom: 2 }}>
-        🔍 Análisis Crítico
-      </Typography>
-      
-      <Grid container spacing={2}>
-        <Grid xs={12} md={4}>
-          <Paper sx={{ padding: 2, backgroundColor: '#2d2416', border: '1px solid #ff9800' }}>
-            <Typography variant="body2" sx={{ color: '#ffb74d', fontWeight: 'bold' }}>
-              String más largo:
+    <Box>
+      {/* Strings críticos */}
+      <Grid container spacing={3} sx={{ marginBottom: 3 }}>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ padding: 3, backgroundColor: '#4a4a3a', border: '1px solid #ffcc80' }}>
+            <Typography variant="h6" sx={{ color: '#ffcc80', marginBottom: 2 }}>
+              String más crítico (mayor caída)
             </Typography>
-            <Typography variant="body1" sx={{ color: '#fff' }}>
-              {longestString.string_id}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-              {longestString.length_total_m.toFixed(2)} m | {longestString.v_drop_real_pct.toFixed(2)}%
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>ID:</Typography>
+              <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                {analysis.highestVoltDrop.string_id}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>Longitud:</Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                {analysis.highestVoltDrop.length_total_m.toFixed(2)} m
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>Caída de tensión:</Typography>
+              <Typography variant="body2" sx={{ color: '#ffab91', fontWeight: 'bold' }}>
+                {analysis.highestVoltDrop.v_drop_real_pct.toFixed(3)}%
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>Sección comercial:</Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                {analysis.highestVoltDrop.s_comercial_mm2} mm²
+              </Typography>
+            </Box>
           </Paper>
         </Grid>
         
-        <Grid xs={12} md={4}>
-          <Paper sx={{ padding: 2, backgroundColor: '#2d1b1b', border: '1px solid #f44336' }}>
-            <Typography variant="body2" sx={{ color: '#ff6b6b', fontWeight: 'bold' }}>
-              Mayor caída de tensión:
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ padding: 3, backgroundColor: '#3a4a3a', border: '1px solid #a5d6a7' }}>
+            <Typography variant="h6" sx={{ color: '#a5d6a7', marginBottom: 2 }}>
+              String más eficiente (menor caída)
             </Typography>
-            <Typography variant="body1" sx={{ color: '#fff' }}>
-              {highestVoltageDropString.string_id}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-              {highestVoltageDropString.v_drop_real_pct.toFixed(3)}% | {highestVoltageDropString.s_comercial_mm2}mm²
-            </Typography>
-          </Paper>
-        </Grid>
-        
-        <Grid xs={12} md={4}>
-          <Paper sx={{ 
-            padding: 2, 
-            backgroundColor: stringsOverLimit > 0 ? '#2d1b1b' : '#1b2d1b', 
-            border: `1px solid ${stringsOverLimit > 0 ? '#f44336' : '#4caf50'}` 
-          }}>
-            <Typography variant="body2" sx={{ 
-              color: stringsOverLimit > 0 ? '#ff6b6b' : '#81c784', 
-              fontWeight: 'bold' 
-            }}>
-              Cumplimiento normativo:
-            </Typography>
-            <Typography variant="body1" sx={{ color: '#fff' }}>
-              {validResults.length - stringsOverLimit}/{validResults.length}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-              {stringsOverLimit > 0 ? `${stringsOverLimit} fuera de límite` : 'Todos dentro de límite'}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>ID:</Typography>
+              <Typography variant="body2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+                {analysis.lowestVoltDrop.string_id}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>Longitud:</Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                {analysis.lowestVoltDrop.length_total_m.toFixed(2)} m
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', marginBottom: 1 }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>Caída de tensión:</Typography>
+              <Typography variant="body2" sx={{ color: '#a5d6a7', fontWeight: 'bold' }}>
+                {analysis.lowestVoltDrop.v_drop_real_pct.toFixed(3)}%
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>Sección comercial:</Typography>
+              <Typography variant="body2" sx={{ color: '#fff' }}>
+                {analysis.lowestVoltDrop.s_comercial_mm2} mm²
+              </Typography>
+            </Box>
           </Paper>
         </Grid>
       </Grid>
-    </Box>
-  );
-}
 
-// Componentes placeholder para otros tipos de circuito
-function Level1ResultsTable({ results }: { results: any[] }) {
-  return (
-    <Box sx={{ textAlign: 'center', padding: 4 }}>
-      <Typography variant="h6" sx={{ color: '#a0a0a0' }}>
-        🚧 Tabla de Nivel 1 DC
-      </Typography>
-      <Typography variant="body2" sx={{ color: '#666' }}>
-        {results.length} elementos calculados (tabla por implementar)
-      </Typography>
-    </Box>
-  );
-}
-
-function ACResultsTable({ results }: { results: any[] }) {
-  return (
-    <Box sx={{ textAlign: 'center', padding: 4 }}>
-      <Typography variant="h6" sx={{ color: '#a0a0a0' }}>
-        🚧 Tabla de Circuitos AC
-      </Typography>
-      <Typography variant="body2" sx={{ color: '#666' }}>
-        {results.length} elementos calculados (tabla por implementar)
-      </Typography>
-    </Box>
-  );
-}
-
-function MVResultsTable({ results }: { results: any[] }) {
-  return (
-    <Box sx={{ textAlign: 'center', padding: 4 }}>
-      <Typography variant="h6" sx={{ color: '#a0a0a0' }}>
-        🚧 Tabla de Media Tensión
-      </Typography>
-      <Typography variant="body2" sx={{ color: '#666' }}>
-        {results.length} elementos calculados (tabla por implementar)
-      </Typography>
-    </Box>
-  );
-}
-interface CalculationTabContentProps {
-  tab: any;
-  calculation: CalculationResult | null;
-  onCalculate: () => void;
-  isLoading: boolean;
-  norm: string;
-}
-
-function CalculationTabContent({ tab, calculation, onCalculate, isLoading, norm }: CalculationTabContentProps) {
-  return (
-    <Box>
-      {/* Header de la pestaña */}
-      <Box sx={{ marginBottom: 3 }}>
-        <Typography variant="h5" sx={{ color: '#fff', fontWeight: 'bold', marginBottom: 1 }}>
-          {tab.icon} {tab.label}
+      {/* Resumen estadístico */}
+      <Paper sx={{ padding: 3, backgroundColor: '#666', border: '1px solid #525252' }}>
+        <Typography variant="h6" sx={{ color: '#a5d6a7', marginBottom: 2 }}>
+          Resumen Estadístico
         </Typography>
-        <Typography variant="body1" sx={{ color: '#a0a0a0' }}>
-          {tab.description}
-        </Typography>
-      </Box>
-
-      {/* Configuración y botón de cálculo */}
-      <Paper sx={{ 
-        padding: 3, 
-        marginBottom: 3,
-        backgroundColor: '#16213e',
-        border: '1px solid #0f3460'
-      }}>
-        <Grid container spacing={3} alignItems="center">
-          <Grid xs={12} md={3}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel sx={{ color: '#fff' }}>Normativa</InputLabel>
-              <Select
-                value={norm}
-                onChange={(e) => setNorm(e.target.value as any)}
-                sx={{
-                  color: '#fff',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#16213e' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#e53e3e' },
-                  '& .MuiSvgIcon-root': { color: '#fff' },
-                }}
-              >
-                <MenuItem value="IEC">IEC</MenuItem>
-                <MenuItem value="NEC">NEC</MenuItem>
-                <MenuItem value="Personalizada">Personalizada</MenuItem>
-              </Select>
-            </FormControl>
+        
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={4}>
+            <Typography variant="body2" sx={{ color: '#b0b0b0', marginBottom: 1 }}>
+              Cumplimiento normativo:
+            </Typography>
+            <Typography variant="h6" sx={{ 
+              color: analysis.overLimitStrings.length === 0 ? '#a5d6a7' : '#ffab91',
+              fontWeight: 'bold'
+            }}>
+              {validResults.length - analysis.overLimitStrings.length}/{validResults.length} strings
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              {analysis.overLimitStrings.length === 0 
+                ? 'Todos dentro del límite (≤1.5%)'
+                : `${analysis.overLimitStrings.length} strings exceden el límite`}
+            </Typography>
           </Grid>
 
-          <Grid xs={12} md={3}>
-            <Button
-              variant="contained"
-              fullWidth
-              onClick={onCalculate}
-              disabled={isLoading}
-              startIcon={isLoading ? <CircularProgress size={20} /> : <CalculateIcon />}
-              sx={{ 
-                background: 'linear-gradient(45deg, #e53e3e 30%, #ff6b6b 90%)',
-                color: 'white',
-                fontWeight: 'bold',
-                borderRadius: '25px',
-                '&:hover': {
-                  background: 'linear-gradient(45deg, #c53030 30%, #e53e3e 90%)',
-                },
-                '&:disabled': { background: '#666' },
-              }}
-            >
-              {isLoading ? 'Calculando...' : `Calcular ${tab.label}`}
-            </Button>
+          <Grid item xs={12} md={4}>
+            <Typography variant="body2" sx={{ color: '#b0b0b0', marginBottom: 1 }}>
+              Rangos de longitud:
+            </Typography>
+            <Typography variant="body1" sx={{ color: '#fff' }}>
+              {analysis.shortest.length_total_m.toFixed(1)}m - {analysis.longest.length_total_m.toFixed(1)}m
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Promedio: {analysis.avgLength}m
+            </Typography>
           </Grid>
 
-          <Grid xs={12} md={6}>
-            {calculation && (
-              <Chip 
-                label={
-                  calculation.status === 'success' 
-                    ? `✅ Calculado (${calculation.results?.length || 0} elementos)`
-                    : calculation.status === 'error'
-                    ? '❌ Error en cálculo'
-                    : '⏳ Calculando...'
-                }
-                sx={{ 
-                  backgroundColor: calculation.status === 'success' ? '#1b2d1b' : '#2d1b1b',
-                  color: calculation.status === 'success' ? '#81c784' : '#ff6b6b',
-                  fontWeight: 'bold',
-                  width: '100%',
-                  height: 40
-                }}
-              />
-            )}
+          <Grid item xs={12} md={4}>
+            <Typography variant="body2" sx={{ color: '#b0b0b0', marginBottom: 1 }}>
+              Pérdidas totales:
+            </Typography>
+            <Typography variant="h6" sx={{ color: '#ffcc80', fontWeight: 'bold' }}>
+              {analysis.totalPowerLoss} W
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+              Caída promedio: {analysis.avgVoltDrop}%
+            </Typography>
           </Grid>
         </Grid>
-      </Paper>
 
-      {/* Resultados */}
-      {calculation && (
-        <Paper sx={{ 
-          padding: 3,
-          backgroundColor: '#16213e',
-          border: '1px solid #0f3460'
-        }}>
-          {calculation.status === 'success' ? (
-            <Box>
-              <Typography variant="h6" sx={{ color: '#81c784', marginBottom: 2 }}>
-                📊 Resultados del Cálculo
-              </Typography>
-              
-              {/* Tabla de resultados específica para strings */}
-              {tab.circuitType === 'dc_strings' && <StringsResultsTable results={calculation.results} />}
-              {tab.circuitType === 'level_1_dc' && <Level1ResultsTable results={calculation.results} />}
-              {tab.circuitType === 'ac_circuits' && <ACResultsTable results={calculation.results} />}
-              {tab.circuitType === 'mv_circuits' && <MVResultsTable results={calculation.results} />}
-              
-              {/* Estadísticas generales */}
-              <Box sx={{ marginTop: 3 }}>
-                <Typography variant="body1" sx={{ color: '#fff', marginBottom: 1 }}>
-                  📈 Resumen: {calculation.results?.length || 0} elementos calculados
-                </Typography>
-                
-                {/* Mostrar strings críticos si es dc_strings */}
-                {tab.circuitType === 'dc_strings' && calculation.results && calculation.results.length > 0 && (
-                  <StringsCriticalAnalysis results={calculation.results} />
-                )}
-              </Box>
+        {/* Strings fuera de límite */}
+        {analysis.overLimitStrings.length > 0 && (
+          <Box sx={{ marginTop: 3, padding: 2, backgroundColor: '#4a3a3a', borderRadius: '8px' }}>
+            <Typography variant="body2" sx={{ color: '#ffab91', fontWeight: 'bold', marginBottom: 1 }}>
+              Strings que exceden límite normativo (&gt;1.5%):
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              {analysis.overLimitStrings.slice(0, 10).map((string, i) => (
+                <Chip
+                  key={i}
+                  label={`${string.string_id}: ${string.v_drop_real_pct.toFixed(2)}%`}
+                  size="small"
+                  sx={{ 
+                    backgroundColor: 'rgba(255, 171, 145, 0.2)',
+                    color: '#ffab91',
+                    border: '1px solid #ffab91'
+                  }}
+                />
+              ))}
+              {analysis.overLimitStrings.length > 10 && (
+                <Chip
+                  label={`+${analysis.overLimitStrings.length - 10} más`}
+                  size="small"
+                  sx={{ 
+                    backgroundColor: 'rgba(255, 171, 145, 0.1)',
+                    color: '#ffab91',
+                  }}
+                />
+              )}
             </Box>
-          ) : calculation.status === 'error' ? (
-            <Alert severity="error" sx={{ backgroundColor: '#2d1b1b', color: '#ff6b6b' }}>
-              Error: {calculation.error}
-            </Alert>
-          ) : null}
-        </Paper>
-      )}
-
-      {/* Estado vacío */}
-      {!calculation && (
-        <Paper sx={{ 
-          padding: 4, 
-          textAlign: 'center',
-          backgroundColor: '#16213e',
-          border: '1px solid #0f3460'
-        }}>
-          <Typography variant="h6" sx={{ color: '#a0a0a0', marginBottom: 2, fontSize: '48px' }}>
-            ⚡
-          </Typography>
-          <Typography variant="h6" sx={{ color: '#fff', marginBottom: 1 }}>
-            Listo para calcular {tab.label}
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-            Haz clic en el botón "Calcular" para ejecutar los cálculos
-          </Typography>
-        </Paper>
-      )}
+          </Box>
+        )}
+      </Paper>
     </Box>
   );
 }
@@ -1040,98 +1281,148 @@ interface SummaryTabContentProps {
 }
 
 function SummaryTabContent({ calculations, projectName, progress }: SummaryTabContentProps) {
+  const stringsResult = calculations.strings;
+  const hasData = stringsResult && stringsResult.status === 'success' && stringsResult.results.length > 0;
+
   return (
     <Box>
       <Typography variant="h5" sx={{ color: '#fff', fontWeight: 'bold', marginBottom: 3 }}>
-        📊 Resumen Ejecutivo - {projectName}
+        <SummarizeIcon sx={{ marginRight: 1, verticalAlign: 'middle' }} />
+        Resumen Ejecutivo - {projectName}
       </Typography>
 
       {/* Estadísticas generales */}
       <Grid container spacing={3} sx={{ marginBottom: 3 }}>
-        <Grid xs={12} md={3}>
-          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#16213e' }}>
-            <Typography variant="h4" sx={{ color: '#81c784' }}>
+        <Grid item xs={12} md={3}>
+          <Paper sx={{ padding: 3, textAlign: 'center', backgroundColor: '#525252' }}>
+            <Typography variant="h3" sx={{ color: '#a5d6a7', fontWeight: 'bold' }}>
               {progress.completed}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
+            <Typography variant="body1" sx={{ color: '#b0b0b0' }}>
               Secciones Calculadas
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#888', marginTop: 1 }}>
+              de {progress.total} total
             </Typography>
           </Paper>
         </Grid>
         
-        <Grid xs={12} md={3}>
-          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#16213e' }}>
-            <Typography variant="h4" sx={{ color: '#e53e3e' }}>
-              {calculations.strings?.results?.length || 0}
+        <Grid item xs={12} md={3}>
+          <Paper sx={{ padding: 3, textAlign: 'center', backgroundColor: '#525252' }}>
+            <Typography variant="h3" sx={{ color: '#ffb74d', fontWeight: 'bold' }}>
+              {stringsResult?.results?.length || 0}
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-              Strings DC
+            <Typography variant="body1" sx={{ color: '#b0b0b0' }}>
+              Strings Calculados
             </Typography>
-          </Paper>
-        </Grid>
-
-        <Grid xs={12} md={3}>
-          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#16213e' }}>
-            <Typography variant="h4" sx={{ color: '#ff9800' }}>
-              {calculations.ac?.results?.length || 0}
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-              Circuitos AC
+            <Typography variant="body2" sx={{ color: '#888', marginTop: 1 }}>
+              circuitos DC
             </Typography>
           </Paper>
         </Grid>
 
-        <Grid xs={12} md={3}>
-          <Paper sx={{ padding: 2, textAlign: 'center', backgroundColor: '#16213e' }}>
-            <Typography variant="h4" sx={{ color: '#9c27b0' }}>
+        <Grid item xs={12} md={3}>
+          <Paper sx={{ padding: 3, textAlign: 'center', backgroundColor: '#525252' }}>
+            <Typography variant="h3" sx={{ color: '#ffcc80', fontWeight: 'bold' }}>
+              {hasData ? 
+                stringsResult.results.filter(r => r.v_drop_real_pct <= 1.5).length 
+                : 0}
+            </Typography>
+            <Typography variant="body1" sx={{ color: '#b0b0b0' }}>
+              Strings Conformes
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#888', marginTop: 1 }}>
+              dentro de límites
+            </Typography>
+          </Paper>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <Paper sx={{ padding: 3, textAlign: 'center', backgroundColor: '#525252' }}>
+            <Typography variant="h3" sx={{ color: '#ce93d8', fontWeight: 'bold' }}>
               {Math.round(progress.percentage)}%
             </Typography>
-            <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
+            <Typography variant="body1" sx={{ color: '#b0b0b0' }}>
               Progreso Total
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#888', marginTop: 1 }}>
+              del proyecto
             </Typography>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Estado de cálculos */}
-      <Paper sx={{ padding: 3, backgroundColor: '#16213e', marginBottom: 3 }}>
+      {/* Estado detallado */}
+      <Paper sx={{ padding: 3, backgroundColor: '#525252', marginBottom: 3 }}>
         <Typography variant="h6" sx={{ color: '#fff', marginBottom: 2 }}>
-          📋 Estado de Cálculos
+          Estado Detallado del Proyecto
         </Typography>
         
-        {Object.entries(calculations).map(([key, calc]) => (
-          <Box key={key} sx={{ marginBottom: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Chip
-                label={calc?.status === 'success' ? '✅' : calc?.status === 'error' ? '❌' : '⏳'}
-                size="small"
-              />
-              <Typography variant="body1" sx={{ color: '#fff', flexGrow: 1 }}>
-                {key.charAt(0).toUpperCase() + key.slice(1)}
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ padding: 2, backgroundColor: '#666', borderRadius: '8px' }}>
+              <Typography variant="body1" sx={{ color: '#a5d6a7', fontWeight: 'bold', marginBottom: 1 }}>
+                Strings DC
               </Typography>
-              <Typography variant="body2" sx={{ color: '#a0a0a0' }}>
-                {calc ? `${calc.results?.length || 0} elementos` : 'Pendiente'}
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+                {stringsResult ? 
+                  `${stringsResult.results?.length || 0} elementos calculados` :
+                  'Pendiente de cálculo'
+                }
+              </Typography>
+              {stringsResult?.timestamp && (
+                <Typography variant="caption" sx={{ color: '#888' }}>
+                  Último cálculo: {new Date(stringsResult.timestamp).toLocaleString()}
+                </Typography>
+              )}
+            </Box>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <Box sx={{ padding: 2, backgroundColor: '#4a4a3a', borderRadius: '8px', opacity: 0.6 }}>
+              <Typography variant="body1" sx={{ color: '#ffcc80', fontWeight: 'bold', marginBottom: 1 }}>
+                Otros Cálculos
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#b0b0b0' }}>
+                Nivel 1 DC, AC y MV próximamente
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#888' }}>
+                En desarrollo
               </Typography>
             </Box>
-          </Box>
-        ))}
+          </Grid>
+        </Grid>
       </Paper>
 
-      {/* Botón de exportar (placeholder) */}
-      <Box sx={{ textAlign: 'center' }}>
+      {/* Resumen de resultados si hay datos */}
+      {hasData && (
+        <Paper sx={{ padding: 3, backgroundColor: '#525252' }}>
+          <Typography variant="h6" sx={{ color: '#fff', marginBottom: 2 }}>
+            Resumen de Resultados de Strings
+          </Typography>
+          <StringsCriticalAnalysis results={stringsResult.results} />
+        </Paper>
+      )}
+
+      {/* Botón de exportar */}
+      <Box sx={{ textAlign: 'center', marginTop: 3 }}>
         <Button
           variant="contained"
           size="large"
           startIcon={<AssessmentIcon />}
+          disabled={!hasData}
           sx={{ 
-            background: 'linear-gradient(45deg, #9c27b0 30%, #ba68c8 90%)',
+            backgroundColor: hasData ? '#666' : '#444',
             color: 'white',
             fontWeight: 'bold',
-            borderRadius: '25px',
+            borderRadius: '8px',
             padding: '12px 30px',
+            '&:hover': hasData ? {
+              backgroundColor: '#777',
+            } : {},
           }}
         >
-          Exportar Reporte PDF
+          {hasData ? 'Exportar Reporte PDF' : 'Complete los cálculos para exportar'}
         </Button>
       </Box>
     </Box>
