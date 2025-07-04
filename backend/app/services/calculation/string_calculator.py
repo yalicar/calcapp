@@ -252,13 +252,14 @@ def validate_config_parameters(config: dict) -> dict:
 
 def get_grouping_factor_safe(normativa_config: dict, number_of_circuits: int, 
                            method: str, layout: str) -> float:
-    """✅ FUNCIÓN MEJORADA: Obtiene factor de agrupamiento de forma segura"""
+    """✅ FUNCIÓN CORREGIDA: Obtiene factor de agrupamiento de forma segura"""
     try:
         grouping_corr = normativa_config.get("grouping_factors", {})
         default_factor = 1.0
         
-        if method not in grouping_corr:
-            logger.warning(f"Método de instalación '{method}' no encontrado, usando factor {default_factor}")
+        # ✅ CORRECCIÓN: Verificar que method sea string y esté en grouping_corr
+        if not isinstance(method, str) or method not in grouping_corr:
+            logger.warning(f"Método de instalación '{method}' no encontrado o inválido, usando factor {default_factor}")
             return default_factor
         
         method_data = grouping_corr[method]
@@ -266,10 +267,13 @@ def get_grouping_factor_safe(normativa_config: dict, number_of_circuits: int,
         
         # Extraer tabla de valores
         if isinstance(method_data, dict):
-            if layout and layout in method_data and "values" in method_data[layout]:
+            # ✅ CORRECCIÓN: Verificar que layout sea string antes de usar 'in'
+            if layout and isinstance(layout, str) and layout in method_data and "values" in method_data[layout]:
                 group_table = method_data[layout]["values"]
+                logger.debug(f"Usando tabla de agrupamiento '{layout}' para método '{method}'")
             elif "values" in method_data:
                 group_table = method_data["values"]
+                logger.debug(f"Usando tabla de agrupamiento directa para método '{method}'")
             else:
                 # Buscar primera tabla disponible
                 for key, value in method_data.items():
@@ -282,17 +286,26 @@ def get_grouping_factor_safe(normativa_config: dict, number_of_circuits: int,
             logger.warning(f"No se encontró tabla de agrupamiento para método '{method}', usando factor {default_factor}")
             return default_factor
         
+        # ✅ CORRECCIÓN: Asegurar que number_of_circuits sea entero
+        try:
+            number_of_circuits = int(number_of_circuits)
+        except (ValueError, TypeError):
+            logger.error(f"Número de circuitos inválido: {number_of_circuits}, usando factor {default_factor}")
+            return default_factor
+        
         # Búsqueda del factor
         str_circuits = str(number_of_circuits)
         
         # 1. Búsqueda exacta
         if str_circuits in group_table:
-            return float(group_table[str_circuits])
+            factor = float(group_table[str_circuits])
+            logger.debug(f"Factor de agrupamiento exacto: {factor} para {number_of_circuits} strings")
+            return factor
         
         # 2. Búsqueda por rangos (ej: "10+", "6+")
         applicable_ranges = []
         for key in group_table.keys():
-            if "+" in key:
+            if isinstance(key, str) and "+" in key:
                 try:
                     threshold = int(key.replace("+", ""))
                     if number_of_circuits >= threshold:
@@ -310,7 +323,7 @@ def get_grouping_factor_safe(normativa_config: dict, number_of_circuits: int,
         numeric_keys = []
         for key in group_table.keys():
             try:
-                if "+" not in key:
+                if isinstance(key, (str, int)) and "+" not in str(key):
                     numeric_keys.append((int(key), float(group_table[key])))
             except ValueError:
                 continue
@@ -328,6 +341,9 @@ def get_grouping_factor_safe(normativa_config: dict, number_of_circuits: int,
         
     except Exception as e:
         logger.error(f"Error obteniendo factor de agrupamiento: {e}")
+        logger.error(f"  - method: {method} (tipo: {type(method)})")
+        logger.error(f"  - layout: {layout} (tipo: {type(layout)})")
+        logger.error(f"  - number_of_circuits: {number_of_circuits} (tipo: {type(number_of_circuits)})")
         return 1.0
 
 def diagnose_config(config: dict) -> dict:
@@ -736,15 +752,13 @@ def apply_correction_factors(i_nominal: float, config: dict) -> float:
             raise ValueError(f"Corriente nominal inválida: {i_nominal}A")
         
         # Cargar configuración de normativa
-        # Obtener project_name del contexto o config
         project_name = config.get("project_name") or config.get("_metadata", {}).get("project_name")
         normativa_name = SECTIONS_CONFIG.get("normativa_used", "IEC")
 
-        # ✅ Solo usar normativa del proyecto para cálculos de strings
+        # Usar normativa del proyecto para cálculos de strings
         if normativa_name == "PERSONALIZADA" and project_name:
             normativa_config = get_normativa_config_fixed(normativa_name, project_name)
         else:
-            # Para otros tipos de cálculos, usar normativa base
             normativa_config = get_normativa_config_fixed(normativa_name)
 
         # Validar estructura si es personalizada
@@ -755,8 +769,10 @@ def apply_correction_factors(i_nominal: float, config: dict) -> float:
         
         temp_corr = normativa_config.get("temperature_correction", {})
         
-        # Factor de temperatura seguro
-        current_ambient = config.get("current_ambient", temp_corr.get("ambient_design", 30))
+        # ✅ FACTOR DE TEMPERATURA MEJORADO
+        current_ambient = config.get("current_ambient", 
+                                   config.get("correction_factors", {}).get("ambient_temperature", {}).get("current_ambient", 
+                                   temp_corr.get("ambient_design", 30)))
         temp_factor = 1.0
         
         if "values" in temp_corr and temp_corr["values"]:
@@ -765,6 +781,7 @@ def apply_correction_factors(i_nominal: float, config: dict) -> float:
             # Búsqueda exacta
             if str(current_ambient) in temp_values:
                 temp_factor = float(temp_values[str(current_ambient)])
+                logger.debug(f"Factor de temperatura exacto: {temp_factor} para {current_ambient}°C")
             else:
                 # Interpolación o valor más cercano
                 available_temps = []
@@ -791,36 +808,55 @@ def apply_correction_factors(i_nominal: float, config: dict) -> float:
                         closest = min(available_temps, key=lambda x: abs(x[0] - current_ambient))
                         temp_factor = closest[1]
                         logger.warning(f"Temperatura {current_ambient}°C fuera de rango, usando factor {temp_factor} ({closest[0]}°C)")
+        else:
+            logger.warning(f"No hay tabla de temperatura, usando factor {temp_factor}")
         
-        # Factor de agrupamiento seguro
-        method = config.get("method", normativa_config.get("installation", {}).get("method", "conduit"))
-        layout = config.get("layout", normativa_config.get("installation", {}).get("layout", "trefoil"))
+        # ✅ FACTOR DE AGRUPAMIENTO MEJORADO
+        method = config.get("method", 
+                          config.get("installation", {}).get("method", 
+                          normativa_config.get("installation", {}).get("method", "conduit")))
+        layout = config.get("layout", 
+                          config.get("installation", {}).get("layout", 
+                          normativa_config.get("installation", {}).get("layout", "single_layer")))
         number_of_circuits = config.get("number_of_parallel_strings", 1)
+        
+        # ✅ CORRECCIÓN: Asegurar tipos correctos
+        method = str(method) if method is not None else "conduit"
+        layout = str(layout) if layout is not None else "single_layer"
+        
+        try:
+            number_of_circuits = int(number_of_circuits)
+        except (ValueError, TypeError):
+            logger.warning(f"Número de strings inválido {number_of_circuits}, usando 1")
+            number_of_circuits = 1
+        
+        logger.debug(f"Parámetros de agrupamiento: method='{method}', layout='{layout}', circuits={number_of_circuits}")
         
         group_factor = get_grouping_factor_safe(normativa_config, number_of_circuits, method, layout)
         
         # Validación final
-        if temp_factor <= 0:
-            logger.error(f"Factor de temperatura inválido: {temp_factor}, usando 1.0")
-            temp_factor = 1.0
+        if temp_factor <= 0 or temp_factor > 2:
+            logger.error(f"Factor de temperatura inválido: {temp_factor}, usando 0.8")
+            temp_factor = 0.8
         
-        if group_factor <= 0:
-            logger.error(f"Factor de agrupamiento inválido: {group_factor}, usando 1.0")
-            group_factor = 1.0
+        if group_factor <= 0 or group_factor > 1.2:
+            logger.error(f"Factor de agrupamiento inválido: {group_factor}, usando 0.8")
+            group_factor = 0.8
         
-        # Aplicar corrección
-        i_adjusted = i_nominal / (temp_factor * group_factor)
+        # ✅ APLICAR CORRECCIÓN CORRECTAMENTE
+        combined_factor = temp_factor * group_factor
+        i_adjusted = i_nominal / combined_factor
         
-        logger.debug(f"Corrección de corriente: {i_nominal:.2f}A → {i_adjusted:.2f}A "
-                    f"(temp_factor: {temp_factor:.3f}, group_factor: {group_factor:.3f})")
+        logger.info(f"Corrección de corriente: {i_nominal:.2f}A → {i_adjusted:.2f}A "
+                   f"(temp_factor: {temp_factor:.3f}, group_factor: {group_factor:.3f}, combined: {combined_factor:.3f})")
         
         return i_adjusted
         
     except Exception as e:
         logger.error(f"Error aplicando factores de corrección: {e}")
         safety_factor = 1.25
-        result = i_nominal * safety_factor
-        logger.warning(f"Usando corrección de seguridad: {i_nominal:.2f}A → {result:.2f}A (factor {safety_factor})")
+        result = i_nominal / safety_factor  # ✅ CORRECCIÓN: Dividir, no multiplicar
+        logger.warning(f"Usando corrección de seguridad: {i_nominal:.2f}A → {result:.2f}A (dividido por factor {safety_factor})")
         return result
     
 def get_commercial_section(theoretical_section_mm2: float, circuit_type: str = "dc_strings") -> Optional[float]:

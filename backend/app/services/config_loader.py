@@ -39,35 +39,71 @@ def load_panel_database() -> Dict[str, Any]:
 
 def get_panel_data(panel_model: str) -> Dict[str, Any]:
     """
-    Obtiene los datos de un panel específico
+    🔧 VERSIÓN MEJORADA: Busca paneles de forma inteligente
     
-    Args:
-        panel_model: Modelo del panel según aparece en project_info
-        
-    Returns:
-        Diccionario con los parámetros del panel
+    Estrategias de búsqueda:
+    1. Búsqueda exacta por panel_model
+    2. Búsqueda por cualquier clave que contenga panel_model
+    3. Búsqueda por modelo sin marca
+    4. Sugerencias de paneles similares
     """
     try:
         panel_db = load_panel_database()
         panels = panel_db.get('panels', {})
         
-        if panel_model not in panels:
-            available_panels = list(panels.keys())
-            logger.warning(f"Panel '{panel_model}' no encontrado. Disponibles: {available_panels}")
-            
-            # Retornar panel personalizado como fallback
-            if "Panel Personalizado" in panels:
-                logger.info("Usando panel personalizado como fallback")
-                return panels["Panel Personalizado"]
-            else:
-                raise ValueError(f"Panel '{panel_model}' no encontrado y no hay fallback disponible")
+        # 1. BÚSQUEDA EXACTA
+        if panel_model in panels:
+            panel_data = panels[panel_model].copy()
+            logger.info(f"✅ Panel encontrado (exacto): '{panel_model}' (ISC: {panel_data['electrical_stc']['isc']}A)")
+            return panel_data
         
-        panel_data = panels[panel_model].copy()
-        logger.info(f"Datos del panel '{panel_model}' cargados exitosamente")
-        return panel_data
+        # 2. BÚSQUEDA CONTENIENDO EL MODELO (ej: buscar "TSM-720NEG21C.20" en "Trina Solar TSM-720NEG21C.20")
+        for panel_key in panels.keys():
+            if panel_model in panel_key:
+                panel_data = panels[panel_key].copy()
+                logger.info(f"✅ Panel encontrado (contiene modelo): '{panel_key}' para búsqueda '{panel_model}' (ISC: {panel_data['electrical_stc']['isc']}A)")
+                return panel_data
+        
+        # 3. BÚSQUEDA POR FINAL DEL NOMBRE (ej: buscar por modelo sin marca)
+        for panel_key in panels.keys():
+            if panel_key.endswith(panel_model):
+                panel_data = panels[panel_key].copy()
+                logger.info(f"✅ Panel encontrado (termina con): '{panel_key}' para búsqueda '{panel_model}' (ISC: {panel_data['electrical_stc']['isc']}A)")
+                return panel_data
+        
+        # 4. BÚSQUEDA INSENSIBLE A MAYÚSCULAS Y ESPACIOS
+        panel_model_clean = panel_model.strip().lower()
+        for panel_key in panels.keys():
+            panel_key_clean = panel_key.strip().lower()
+            if panel_model_clean in panel_key_clean or panel_key_clean.endswith(panel_model_clean):
+                panel_data = panels[panel_key].copy()
+                logger.info(f"✅ Panel encontrado (similar): '{panel_key}' para búsqueda '{panel_model}' (ISC: {panel_data['electrical_stc']['isc']}A)")
+                return panel_data
+        
+        # 5. SUGERIR PANELES SIMILARES
+        available_panels = list(panels.keys())
+        similar_panels = []
+        
+        # Buscar paneles que contengan parte del modelo buscado
+        model_parts = panel_model.replace('-', ' ').replace('.', ' ').split()
+        for panel_key in available_panels:
+            for part in model_parts:
+                if len(part) >= 3 and part.upper() in panel_key.upper():
+                    similar_panels.append(panel_key)
+                    break
+        
+        # Error con sugerencias
+        error_msg = f"Panel '{panel_model}' no encontrado en la base de datos."
+        if similar_panels:
+            error_msg += f" ¿Quizás quisiste decir: {similar_panels[:3]}?"
+        else:
+            error_msg += f" Paneles disponibles: {available_panels}"
+        
+        logger.error(f"❌ {error_msg}")
+        raise ValueError(error_msg)
     
     except Exception as e:
-        logger.error(f"Error obteniendo datos del panel '{panel_model}': {e}")
+        logger.error(f"❌ Error obteniendo datos del panel '{panel_model}': {e}")
         raise
 
 def load_normativas_config() -> Dict[str, Any]:
@@ -165,53 +201,103 @@ def get_normativa_config(normativa: str, project_name: str = None) -> Dict[str, 
         logger.error(f"Error cargando configuración de normativa '{normativa}': {e}")
         raise  # ← AGREGAR ESTA LÍNEA
 
+# PASO 1: Reemplazar la función build_calculation_config en config_loader.py
+
 def build_calculation_config(
     project_info: Dict[str, Any], 
     normativa: str = "IEC", 
-    project_name: str = None,  # ← NUEVO parámetro
+    project_name: str = None,
     custom_params: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
-    Construye la configuración completa para cálculos combinando:
-    1. Datos del panel (desde project_info + panel_database)
-    2. Configuración de normativa (base + overrides del proyecto)
-    3. Parámetros personalizados (opcional, legacy)
+    🔧 VERSIÓN CORREGIDA: Construye configuración con overrides de proyecto
     
-    Args:
-        project_info: Datos del proyecto (incluye panel_model)
-        normativa: Normativa a usar (IEC, NEC, PERSONALIZADA)
-        project_name: Nombre del proyecto (para cargar overrides)
-        custom_params: Parámetros personalizados opcionales (legacy)
-        
-    Returns:
-        Configuración completa para cálculos
+    Cambios principales:
+    1. Lee directamente el archivo dc_strings.yaml del proyecto
+    2. Aplica overrides ANTES de construir la configuración final
+    3. Agrega logs detallados para debugging
+    4. Marca correctamente cuando se aplican overrides
     """
     try:
+        logger.info(f"🔧 Construyendo config para proyecto: {project_name}, normativa: {normativa}")
+        
         # 1. Obtener datos del panel
         panel_model = project_info.get('panel_model', 'Panel Personalizado')
         panel_data = get_panel_data(panel_model)
+        logger.info(f"📋 Panel cargado: {panel_model} (ISC: {panel_data['electrical_stc']['isc']}A)")
         
-        # 2. Obtener configuración de normativa (base + overrides del proyecto)
-        normativa_config = get_normativa_config(normativa, project_name)
+        # 2. Obtener configuración de normativa BASE
+        normativa_config = get_normativa_config(normativa)
+        logger.info(f"📋 Normativa base cargada: {normativa}")
         
-        # 3. Construir configuración combinada
+        # 🔥 3. CARGAR Y APLICAR OVERRIDES DEL PROYECTO PARA dc_strings
+        overrides_applied = False
+        override_details = {}
+        
+        if project_name:
+            dc_strings_yaml_path = f"backend/projects/{project_name}/normativas/dc_strings.yaml"
+            logger.info(f"🔍 Buscando overrides en: {dc_strings_yaml_path}")
+            
+            if os.path.exists(dc_strings_yaml_path):
+                try:
+                    with open(dc_strings_yaml_path, 'r', encoding='utf-8') as f:
+                        stage_overrides = yaml.safe_load(f)
+                    
+                    logger.info(f"🔥 ARCHIVO YAML ENCONTRADO - Aplicando overrides...")
+                    
+                    # Aplicar cada override directamente a normativa_config
+                    for section, values in stage_overrides.items():
+                        if section.startswith('_'):  # Skip metadata
+                            continue
+                        
+                        if section in normativa_config:
+                            original_values = normativa_config[section].copy()
+                            
+                            if isinstance(values, dict) and isinstance(normativa_config[section], dict):
+                                # Merge profundo para diccionarios
+                                normativa_config[section].update(values)
+                                logger.info(f"🔥 Override MERGE - {section}:")
+                                logger.info(f"     Antes: {original_values}")
+                                logger.info(f"     Después: {normativa_config[section]}")
+                            else:
+                                # Reemplazo directo para valores simples
+                                normativa_config[section] = values
+                                logger.info(f"🔥 Override REPLACE - {section}: {original_values} → {values}")
+                            
+                            override_details[section] = {
+                                'before': original_values,
+                                'after': normativa_config[section]
+                            }
+                        else:
+                            logger.warning(f"⚠️ Sección no encontrada en normativa base: {section}")
+                    
+                    overrides_applied = True
+                    logger.info(f"✅ Overrides aplicados exitosamente - {len(override_details)} secciones modificadas")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Error cargando overrides: {e}")
+                    raise
+            else:
+                logger.info(f"ℹ️ No hay archivo de overrides: {dc_strings_yaml_path}")
+        
+        # 4. Construir configuración combinada (AHORA CON OVERRIDES APLICADOS)
         combined_config = {
-            # Parámetros del panel (desde base de datos)
+            # Parámetros del panel (fijos)
             "isc_ref": panel_data['electrical_stc']['isc'],
             "voc_ref": panel_data['electrical_stc']['voc'],
             "power_stc": panel_data['power_stc'],
             
-            # Factores normativos (pueden venir de overrides del proyecto)
+            # 🔥 Factores normativos (AHORA CON OVERRIDES APLICADOS)
             "isc_correction": normativa_config['correction_factors']['isc_safety_factor'],
             "number_of_parallel_strings": normativa_config['correction_factors']['parallel_strings'],
             
-            # Configuración de cable (puede venir de overrides del proyecto)
+            # 🔥 Configuración de cable (AHORA CON OVERRIDES APLICADOS)
             "cable": normativa_config['cable'].copy(),
             
-            # Configuración de instalación (puede venir de overrides del proyecto)
+            # 🔥 Configuración de instalación (AHORA CON OVERRIDES APLICADOS)
             "installation": normativa_config['installation'].copy(),
             
-            # Factores de corrección (pueden venir de overrides del proyecto)
+            # 🔥 Factores de corrección (AHORA CON OVERRIDES APLICADOS)
             "correction_factors": {
                 "ambient_temperature": {
                     "current_ambient": normativa_config['temperature_correction']['ambient_design'],
@@ -220,43 +306,57 @@ def build_calculation_config(
                 "grouping": normativa_config['grouping_factors']
             },
             
-            # Caída de tensión (puede venir de overrides del proyecto)
+            # 🔥 Caída de tensión (AHORA CON OVERRIDES APLICADOS)
             "voltage_drop": normativa_config['voltage_drop'].copy(),
             
-            # Metadatos
+            # Metadatos detallados
             "_metadata": {
                 "panel_model": panel_model,
                 "panel_data": panel_data,
                 "normativa": normativa,
-                "normativa_config": normativa_config['_metadata'],
+                "normativa_config": {
+                    "has_project_overrides": overrides_applied,
+                    "override_file": dc_strings_yaml_path if overrides_applied else None,
+                    "overrides_info": {
+                        "modified_count": len(override_details),
+                        "modified_sections": list(override_details.keys()),
+                        "details": override_details
+                    } if overrides_applied else {}
+                },
                 "has_custom_params": custom_params is not None,
                 "project_info": project_info,
                 "project_name": project_name
             }
         }
         
-        # 4. Aplicar parámetros personalizados si existen (legacy)
+        # 5. Aplicar parámetros personalizados legacy si existen
         if custom_params:
             combined_config = merge_custom_params(combined_config, custom_params)
+            logger.info(f"🔧 Parámetros personalizados legacy aplicados")
         
-        # ✅ AGREGAR ESTE BLOQUE AQUÍ
+        # 6. Agregar project_name al config principal
         if project_name:
             combined_config["project_name"] = project_name
-            if "_metadata" not in combined_config:
-                combined_config["_metadata"] = {}
             combined_config["_metadata"]["project_name"] = project_name
-            logger.info(f"🔧 Project name agregado al config: {project_name}")
         
-        has_overrides = normativa_config['_metadata'].get('has_project_overrides', False)
-        logger.info(f"Configuración de cálculo construida exitosamente para panel {panel_model} con normativa {normativa}" + 
-                   (f" (con {len(normativa_config['_metadata'].get('overrides_info', {}).get('modified_count', 0))} overrides del proyecto)" if has_overrides else ""))
+        # 🔥 LOG FINAL CON VALORES CRÍTICOS
+        logger.info(f"🎯 === CONFIGURACIÓN FINAL CONSTRUIDA ===")
+        logger.info(f"🎯 Panel: {panel_model} (ISC: {combined_config['isc_ref']}A)")
+        logger.info(f"🎯 Normativa: {normativa} {'(CON OVERRIDES)' if overrides_applied else '(sin overrides)'}")
+        logger.info(f"🎯 isc_correction: {combined_config['isc_correction']}")
+        logger.info(f"🎯 parallel_strings: {combined_config['number_of_parallel_strings']}")
+        logger.info(f"🎯 max_voltage_drop: {combined_config['voltage_drop']['max_percentage']}%")
+        logger.info(f"🎯 reference_voltage: {combined_config['voltage_drop']['reference_voltage']}V")
+        logger.info(f"🎯 ambient_design: {combined_config['correction_factors']['ambient_temperature']['current_ambient']}°C")
+        logger.info(f"🎯 installation_method: {combined_config['installation']['method']}")
+        logger.info(f"🎯 cable_material: {combined_config['cable']['material']}")
         
         return combined_config
         
     except Exception as e:
-        logger.error(f"Error construyendo configuración de cálculo: {e}")
+        logger.error(f"❌ Error construyendo configuración de cálculo: {e}")
         raise
-
+    
 def merge_custom_params(base_config: Dict[str, Any], custom_params: Dict[str, Any]) -> Dict[str, Any]:
     """Combina configuración base con parámetros personalizados"""
     try:

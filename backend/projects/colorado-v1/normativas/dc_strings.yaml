@@ -3,7 +3,7 @@ _metadata:
   circuit_type: dc_strings
   source: user_override
   stage_specific: true
-  updated_at: '2025-07-03T19:53:31.676854'
+  updated_at: '2025-07-04T09:05:58.041558'
 cable:
   material: copper
   max_temp: 90
@@ -16,4 +16,4 @@ installation:
 temperature_correction:
   ambient_design: 40
 voltage_drop:
-  max_percentage: 3
+  max_percentage: 5

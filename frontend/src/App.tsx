@@ -3,6 +3,10 @@ import HomePage from './pages/HomePage'
 import UploadExcelPage from './pages/UploadExcelPage';
 import GridExample from './pages/GridExample'
 import StringCalculationPage from './pages/StringCalculationPage'
+import DCStringsPage from './pages/DCStringsPage';
+import TestEnhancedCalculationPage from './features/calculations/pages/TestEnhancedCalculationPage';
+
+
 // 👇 NUEVO: Importar la página de prueba de normativas
 import TestNormativePage from './features/normatives/pages/TestNormativePage'
 import TestCalculationPage from './features/calculations/pages/TestCalculationPage';
@@ -19,7 +23,10 @@ function App() {
         <Route path="/projects/:projectName/upload" element={<UploadExcelPage />} />
         <Route path="/projects/:projectName/calculations" element={<StringCalculationPage />} />
         <Route path="/test-calculation" element={<TestCalculationPage />} />
-        
+        <Route path="/dc-strings" element={<DCStringsPage />} />
+        <Route path="/test-enhanced-calc" element={<TestEnhancedCalculationPage />} />
+
+
         {/* 👇 NUEVA: Página de prueba de normativas */}
         <Route path="/test-normative" element={<TestNormativePage />} />
       </Routes>

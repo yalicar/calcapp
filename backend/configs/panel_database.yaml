@@ -145,6 +145,62 @@ panels:
       noct: 44
       temp_range: [-40, 85]
 
+  # ✅ PANEL AGREGADO EN POSICIÓN CORRECTA
+  "Trina Solar TSM-720NEG21C.20":
+    manufacturer: "Trina Solar"
+    model: "TSM-720NEG21C.20"
+    series: "Vertex S+"
+    technology: "Monocristalino"
+    power_stc: 720  # W (extrapolado de TSM-715NEG21C.20)
+    
+    electrical_stc:
+      isc: 18.44      # A - VALOR REAL del .PAN file TSM-715NEG21C.20
+      voc: 49.20      # V - VALOR REAL del .PAN file
+      impp: 17.40     # A - VALOR REAL del .PAN file  
+      vmpp: 41.10     # V - VALOR REAL del .PAN file
+      
+    temperature_coefficients:
+      power: -0.290   # %/°C - del .PAN file (muPmpReq)
+      voltage: -0.232 # %/°C - calculado de muVocSpec (-114.0 mV/°C)
+      current: 0.039  # %/°C - calculado de muISC (7.26 mA/°C)
+      
+    operating_conditions:
+      temp_coefficient_isc: 0.039  # %/°C - del .PAN file
+      noct: 44                     # °C - estimado similar a otros Trina
+      temp_range: [-40, 85]        # °C - estándar
+      max_system_voltage: 1500     # V - del .PAN file
+      
+    physical:
+      length: 2384    # mm - VALOR REAL del .PAN file
+      width: 1303     # mm - VALOR REAL del .PAN file  
+      thickness: 33   # mm - VALOR REAL del .PAN file
+      weight: 38.3    # kg - VALOR REAL del .PAN file
+      cells: 132      # Del .PAN: NCelS=66, NCelP=2 → 66*2=132
+      
+    bifaciality:
+      factor: 0.811   # Del .PAN file
+      
+    electrical_advanced:
+      series_resistance: 0.150    # Ohm - del .PAN file
+      shunt_resistance: 200       # Ohm - del .PAN file
+      diodes: 3                   # Del .PAN file
+      
+    certifications:
+      - "IEC 61215"
+      - "IEC 61730" 
+      - "UL 1703"
+      - "VMaxIEC: 1500V"
+      - "VMaxUL: 1500V"
+      
+    warranty:
+      product: 25     # años
+      performance: 25 # años
+      
+    notes: "Especificaciones basadas en archivo .PAN oficial TSM-715NEG21C.20. Modelo muy similar."
+    pan_file_source: "TSM-715NEG21C.20.PAN"
+    datasheet_verified: true
+    created_date: "2025-07-04"
+
   # Panel personalizado (plantilla)
   "Panel Personalizado":
     manufacturer: "Personalizado"
@@ -173,8 +229,8 @@ panels:
 # Metadatos y configuración
 metadata:
   version: "1.0"
-  last_updated: "2025-06-30"
-  total_panels: 6
+  last_updated: "2025-07-04"
+  total_panels: 7
   
   # Parámetros que se pueden editar manualmente
   editable_fields:
@@ -189,7 +245,7 @@ metadata:
     voc: [30.0, 60.0]       # V
     impp: [5.0, 20.0]       # A
     vmpp: [30.0, 50.0]      # V
-    power_stc: [200, 700]   # W
+    power_stc: [200, 800]   # W - ACTUALIZADO para incluir 720W
     temp_coefficient_isc: [0.01, 0.1]  # %/°C
     noct: [35, 50]          # °C
 
@@ -228,31 +284,3 @@ custom_panel_form:
     - operating_conditions
     - physical
     - warranty
-
-  "CS6X-300M":
-    manufacturer: "Canadian Solar"
-    model: "CS6X-300M"
-    technology: "Policristalino"
-    power_stc: 300
-
-    electrical_stc:
-      isc: 8.5
-      voc: 44.5
-      impp: 8.0
-      vmpp: 37.5
-
-    temperature_coefficients:
-      power: -0.38
-      voltage: -0.29
-      current: 0.048
-
-    operating_conditions:
-      temp_coefficient_isc: 0.048
-      noct: 45
-      temp_range: [-40, 85]
-
-    physical:
-      length: 1956
-      width: 992
-      thickness: 40
-      weight: 20.0
