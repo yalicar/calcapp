@@ -1,0 +1,158 @@
+normativa:
+  cable:
+    insulation: XLPE
+    material: copper
+    max_temp: 90
+    type: H07RN-F
+  correction_factors:
+    isc_safety_factor: 1.25
+    parallel_strings: 1
+  country: Internacional
+  description: "Est\xE1ndar internacional para instalaciones el\xE9ctricas en edificaciones"
+  grouping_factors:
+    buried:
+      multilayer:
+        values:
+          1: 0.95
+          2: 0.9
+          3: 0.85
+          4+: 0.8
+      single_layer:
+        values:
+          1: 1.0
+          2: 0.95
+          3: 0.89
+          4: 0.86
+          5: 0.83
+          6: 0.8
+          7: 0.78
+          8: 0.76
+          9: 0.75
+          10+: 0.73
+    conduit:
+      values:
+        1: 1.0
+        2: 0.9
+        3: 0.8
+        4: 0.75
+        5+: 0.7
+    tray_non_perforated:
+      values:
+        1: 1.0
+        2: 0.92
+        3: 0.84
+        4: 0.8
+        5: 0.76
+        6+: 0.72
+    tray_perforated:
+      values:
+        1: 1.0
+        2: 0.95
+        3: 0.87
+        4: 0.84
+        5: 0.8
+        6: 0.78
+        7+: 0.75
+  installation:
+    depth_cm: 50
+    layout: single_layer
+    method: conduit
+    separation: true
+    soil_thermal_resistivity: 1.0
+  name: "IEC 60364 - Instalaciones El\xE9ctricas de Baja Tensi\xF3n"
+  safety_factors:
+    current_safety: 1.0
+    voltage_safety: 1.0
+  standard_sections:
+    ac_circuits:
+      description: "Secciones para circuitos AC seg\xFAn IEC"
+      max_recommended_length: 2000 m
+      mm2:
+      - 25
+      - 35
+      - 50
+      - 70
+      - 95
+      - 120
+      - 150
+      - 185
+      - 240
+      - 300
+      - 400
+      - 500
+      typical_current_range: 100-1000 A
+    dc_strings:
+      description: "Secciones para strings fotovoltaicos DC seg\xFAn IEC"
+      max_recommended_length: 500 m
+      mm2:
+      - 4
+      - 6
+      - 10
+      - 16
+      - 25
+      - 35
+      - 50
+      - 70
+      - 95
+      - 120
+      typical_current_range: 5-15 A
+    level_1_dc:
+      description: "Secciones para combinadores DC seg\xFAn IEC"
+      max_recommended_length: 1000 m
+      mm2:
+      - 16
+      - 25
+      - 35
+      - 50
+      - 70
+      - 95
+      - 120
+      - 150
+      - 185
+      - 240
+      typical_current_range: 50-200 A
+    mv_circuits:
+      description: "Secciones para media tensi\xF3n seg\xFAn IEC"
+      max_recommended_length: 5000 m
+      mm2:
+      - 50
+      - 70
+      - 95
+      - 120
+      - 150
+      - 185
+      - 240
+      - 300
+      - 400
+      - 500
+      - 630
+      - 800
+      typical_current_range: 200-2000 A
+  standards_reference:
+    primary: IEC 60364-5-52
+    secondary:
+    - IEC 60287
+    - IEC 60502
+  temperature_correction:
+    ambient_design: 40
+    reference_temp: 20
+    values:
+      20: 1.15
+      25: 1.08
+      30: 1.04
+      35: 1.0
+      40: 0.96
+      45: 0.91
+      50: 0.87
+      55: 0.82
+      60: 0.76
+  voltage_drop:
+    calculation_method: simple
+    max_percentage: 1.5
+    reference_voltage: 1500
+project_info:
+  based_on: IEC
+  created_at: '2025-07-03T14:42:10.377667'
+  last_modified: '2025-07-03T15:27:51.272758'
+  project_name: colorado-v1
+  version: '1.4000000000000004'

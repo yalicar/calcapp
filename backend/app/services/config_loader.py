@@ -108,17 +108,13 @@ def get_available_normativas() -> Dict[str, str]:
             'PERSONALIZADA': {'name': 'Personalizada (Fallback)', 'description': 'Configuración personalizada', 'country': 'Personalizado'}
         }
 
+# En tu archivo app/services/config_loader.py
+# Buscar la función get_normativa_config y cambiar el final:
+
 def get_normativa_config(normativa: str, project_name: str = None) -> Dict[str, Any]:
     """
     Obtiene la configuración de una normativa específica, 
     con soporte para overrides por proyecto
-    
-    Args:
-        normativa: Nombre de la normativa (IEC, NEC, PERSONALIZADA)
-        project_name: Nombre del proyecto (opcional, para cargar overrides)
-        
-    Returns:
-        Configuración de normativa (base + overrides si aplica)
     """
     try:
         config = load_normativas_config()
@@ -167,23 +163,25 @@ def get_normativa_config(normativa: str, project_name: str = None) -> Dict[str, 
     
     except Exception as e:
         logger.error(f"Error cargando configuración de normativa '{normativa}': {e}")
-
+        raise  # ← AGREGAR ESTA LÍNEA
 
 def build_calculation_config(
     project_info: Dict[str, Any], 
     normativa: str = "IEC", 
+    project_name: str = None,  # ← NUEVO parámetro
     custom_params: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Construye la configuración completa para cálculos combinando:
     1. Datos del panel (desde project_info + panel_database)
-    2. Configuración de normativa
-    3. Parámetros personalizados (opcional)
+    2. Configuración de normativa (base + overrides del proyecto)
+    3. Parámetros personalizados (opcional, legacy)
     
     Args:
         project_info: Datos del proyecto (incluye panel_model)
         normativa: Normativa a usar (IEC, NEC, PERSONALIZADA)
-        custom_params: Parámetros personalizados opcionales
+        project_name: Nombre del proyecto (para cargar overrides)
+        custom_params: Parámetros personalizados opcionales (legacy)
         
     Returns:
         Configuración completa para cálculos
@@ -193,8 +191,8 @@ def build_calculation_config(
         panel_model = project_info.get('panel_model', 'Panel Personalizado')
         panel_data = get_panel_data(panel_model)
         
-        # 2. Obtener configuración de normativa
-        normativa_config = get_normativa_config(normativa)
+        # 2. Obtener configuración de normativa (base + overrides del proyecto)
+        normativa_config = get_normativa_config(normativa, project_name)
         
         # 3. Construir configuración combinada
         combined_config = {
@@ -203,26 +201,26 @@ def build_calculation_config(
             "voc_ref": panel_data['electrical_stc']['voc'],
             "power_stc": panel_data['power_stc'],
             
-            # Factores normativos
+            # Factores normativos (pueden venir de overrides del proyecto)
             "isc_correction": normativa_config['correction_factors']['isc_safety_factor'],
             "number_of_parallel_strings": normativa_config['correction_factors']['parallel_strings'],
             
-            # Configuración de cable (desde normativa, editable)
+            # Configuración de cable (puede venir de overrides del proyecto)
             "cable": normativa_config['cable'].copy(),
             
-            # Configuración de instalación (desde normativa, editable)
+            # Configuración de instalación (puede venir de overrides del proyecto)
             "installation": normativa_config['installation'].copy(),
             
-            # Factores de corrección (desde normativa) - FORMATO CORRECTO
+            # Factores de corrección (pueden venir de overrides del proyecto)
             "correction_factors": {
                 "ambient_temperature": {
                     "current_ambient": normativa_config['temperature_correction']['ambient_design'],
                     "values": normativa_config['temperature_correction']['values']
                 },
-                "grouping": normativa_config['grouping_factors']  # Este era el que faltaba
+                "grouping": normativa_config['grouping_factors']
             },
             
-            # Caída de tensión (desde normativa, editable)
+            # Caída de tensión (puede venir de overrides del proyecto)
             "voltage_drop": normativa_config['voltage_drop'].copy(),
             
             # Metadatos
@@ -232,15 +230,27 @@ def build_calculation_config(
                 "normativa": normativa,
                 "normativa_config": normativa_config['_metadata'],
                 "has_custom_params": custom_params is not None,
-                "project_info": project_info
+                "project_info": project_info,
+                "project_name": project_name
             }
         }
         
-        # 4. Aplicar parámetros personalizados si existen
+        # 4. Aplicar parámetros personalizados si existen (legacy)
         if custom_params:
             combined_config = merge_custom_params(combined_config, custom_params)
         
-        logger.info(f"Configuración de cálculo construida exitosamente para panel {panel_model} con normativa {normativa}")
+        # ✅ AGREGAR ESTE BLOQUE AQUÍ
+        if project_name:
+            combined_config["project_name"] = project_name
+            if "_metadata" not in combined_config:
+                combined_config["_metadata"] = {}
+            combined_config["_metadata"]["project_name"] = project_name
+            logger.info(f"🔧 Project name agregado al config: {project_name}")
+        
+        has_overrides = normativa_config['_metadata'].get('has_project_overrides', False)
+        logger.info(f"Configuración de cálculo construida exitosamente para panel {panel_model} con normativa {normativa}" + 
+                   (f" (con {len(normativa_config['_metadata'].get('overrides_info', {}).get('modified_count', 0))} overrides del proyecto)" if has_overrides else ""))
+        
         return combined_config
         
     except Exception as e:

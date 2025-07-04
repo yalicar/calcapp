@@ -1,15 +1,381 @@
 import yaml
 import math
+import json
 from pathlib import Path
 import pandas as pd
 from typing import Dict, List, Optional
 import logging
+import os
+from datetime import datetime
+from copy import deepcopy
 
 # Configurar logging
 logger = logging.getLogger(__name__)
 
 # Cargar configuración global
 from app.services.config_loader import load_yaml_config
+
+def load_custom_normativa_fixed(override_file: str, base_normativa: str = "IEC"):
+    """
+    ✅ FUNCIÓN CRÍTICA FALTANTE: Carga normativa personalizada manteniendo estructura completa
+    """
+    try:
+        # 1. Cargar normativa base completa
+        with open("backend/configs/normativas.yaml") as f:
+            yaml_data = yaml.safe_load(f)
+        
+        if base_normativa not in yaml_data["normativas"]:
+            logger.error(f"Normativa base '{base_normativa}' no encontrada")
+            return None
+        
+        # 2. Clonar normativa base (estructura completa)
+        custom_config = deepcopy(yaml_data["normativas"][base_normativa])
+        custom_config["name"] = f"{custom_config['name']} (Personalizada)"
+        custom_config["description"] = f"Basada en {base_normativa} con modificaciones personalizadas"
+        
+        # 3. Cargar overrides del JSON
+        try:
+            with open(override_file) as f:
+                overrides = json.load(f)
+        except FileNotFoundError:
+            logger.warning(f"Archivo de overrides '{override_file}' no encontrado, usando base")
+            return custom_config
+        
+        # 4. Aplicar modificaciones manteniendo estructura
+        if "modified_parameters" in overrides:
+            modifications = overrides["modified_parameters"]
+            
+            # Mapear parámetros del JSON a estructura YAML
+            parameter_mapping = {
+                "editable_sections.basic.parameters.isc_safety_factor.value": 
+                    ["correction_factors", "isc_safety_factor"],
+                "editable_sections.basic.parameters.parallel_strings.value": 
+                    ["correction_factors", "parallel_strings"],
+                "editable_sections.cable.parameters.material.value": 
+                    ["cable", "material"],
+                "editable_sections.cable.parameters.insulation.value": 
+                    ["cable", "insulation"],
+                "editable_sections.cable.parameters.max_temp.value": 
+                    ["cable", "max_temp"],
+                "editable_sections.installation.parameters.method.value": 
+                    ["installation", "method"],
+                "editable_sections.installation.parameters.depth_cm.value": 
+                    ["installation", "depth_cm"],
+                "editable_sections.installation.parameters.layout.value": 
+                    ["installation", "layout"],
+                "editable_sections.temperature.parameters.ambient_design.value": 
+                    ["temperature_correction", "ambient_design"],
+                "editable_sections.voltage.parameters.max_percentage.value": 
+                    ["voltage_drop", "max_percentage"],
+                "editable_sections.voltage.parameters.reference_voltage.value": 
+                    ["voltage_drop", "reference_voltage"],
+                "editable_sections.safety.parameters.current_safety.value": 
+                    ["safety_factors", "current_safety"],
+                "editable_sections.safety.parameters.voltage_safety.value": 
+                    ["safety_factors", "voltage_safety"]
+            }
+            
+            # Aplicar cada modificación
+            for json_path, value in modifications.items():
+                if json_path in parameter_mapping:
+                    yaml_path = parameter_mapping[json_path]
+                    
+                    # Navegar y actualizar la estructura anidada
+                    current_dict = custom_config
+                    for key in yaml_path[:-1]:
+                        if key not in current_dict:
+                            current_dict[key] = {}
+                        current_dict = current_dict[key]
+                    
+                    # Actualizar valor final
+                    current_dict[yaml_path[-1]] = value
+                    logger.info(f"Aplicado override: {json_path} -> {yaml_path} = {value}")
+                else:
+                    logger.warning(f"Parámetro no mapeado: {json_path}")
+        
+        logger.info(f"Normativa personalizada cargada exitosamente basada en {base_normativa}")
+        return custom_config
+        
+    except Exception as e:
+        logger.error(f"Error cargando normativa personalizada: {e}")
+        return None
+
+def validate_custom_normativa_structure(config: dict) -> bool:
+    """
+    ✅ FUNCIÓN CRÍTICA FALTANTE: Valida que la normativa personalizada tenga estructura completa
+    """
+    required_sections = [
+        "temperature_correction",
+        "grouping_factors", 
+        "standard_sections",
+        "voltage_drop"
+    ]
+    
+    missing_sections = []
+    for section in required_sections:
+        if section not in config:
+            missing_sections.append(section)
+    
+    if missing_sections:
+        logger.error(f"Normativa personalizada incompleta. Faltan secciones: {missing_sections}")
+        return False
+    
+    # Validar que grouping_factors tenga estructura correcta
+    grouping = config.get("grouping_factors", {})
+    if not grouping:
+        logger.error("grouping_factors vacío en normativa personalizada")
+        return False
+    
+    # Verificar que al menos un método tenga valores
+    has_valid_method = False
+    for method, method_data in grouping.items():
+        if isinstance(method_data, dict):
+            if "values" in method_data and method_data["values"]:
+                has_valid_method = True
+                break
+            # Verificar estructura anidada (layout)
+            for layout, layout_data in method_data.items():
+                if isinstance(layout_data, dict) and "values" in layout_data and layout_data["values"]:
+                    has_valid_method = True
+                    break
+    
+    if not has_valid_method:
+        logger.error("No se encontraron factores de agrupamiento válidos en normativa personalizada")
+        return False
+    
+    logger.info("Estructura de normativa personalizada validada correctamente")
+    return True
+
+def diagnose_normativa_structure(normativa_name: str = None) -> dict:
+    """
+    ✅ FUNCIÓN CRÍTICA FALTANTE: Diagnostica la estructura de la normativa activa
+    """
+    if not normativa_name:
+        normativa_name = SECTIONS_CONFIG.get("normativa_used", "IEC")
+    
+    diagnosis = {
+        "normativa": normativa_name,
+        "status": "OK",
+        "errors": [],
+        "warnings": [],
+        "structure_check": {}
+    }
+    
+    try:
+        config = get_normativa_config_fixed(normativa_name)
+        
+        # Verificar secciones críticas
+        critical_sections = ["temperature_correction", "grouping_factors", "standard_sections", "voltage_drop"]
+        
+        for section in critical_sections:
+            if section not in config:
+                diagnosis["errors"].append(f"Falta sección crítica: {section}")
+                diagnosis["structure_check"][section] = "MISSING"
+            else:
+                diagnosis["structure_check"][section] = "OK"
+        
+        # Verificar grouping_factors específicamente
+        if "grouping_factors" in config:
+            grouping = config["grouping_factors"]
+            methods_found = list(grouping.keys())
+            diagnosis["structure_check"]["grouping_methods"] = methods_found
+            
+            valid_methods = 0
+            for method, method_data in grouping.items():
+                if isinstance(method_data, dict):
+                    if "values" in method_data:
+                        valid_methods += 1
+                    else:
+                        # Verificar estructura anidada
+                        for layout, layout_data in method_data.items():
+                            if isinstance(layout_data, dict) and "values" in layout_data:
+                                valid_methods += 1
+                                break
+            
+            if valid_methods == 0:
+                diagnosis["errors"].append("No se encontraron factores de agrupamiento válidos")
+        
+        # Verificar temperature_correction
+        if "temperature_correction" in config:
+            temp_corr = config["temperature_correction"]
+            if "values" not in temp_corr or not temp_corr["values"]:
+                diagnosis["warnings"].append("Factores de temperatura vacíos")
+        
+        # Determinar estado general
+        if diagnosis["errors"]:
+            diagnosis["status"] = "ERROR"
+        elif diagnosis["warnings"]:
+            diagnosis["status"] = "WARNING"
+        
+        logger.info(f"Diagnóstico de normativa '{normativa_name}': {diagnosis['status']}")
+        
+    except Exception as e:
+        diagnosis["status"] = "CRITICAL"
+        diagnosis["errors"].append(f"Error crítico: {str(e)}")
+    
+    return diagnosis
+
+def validate_config_parameters(config: dict) -> dict:
+    """✅ NUEVA FUNCIÓN: Valida y sanitiza parámetros de configuración"""
+    validated_config = config.copy()
+    
+    # Validar caída de tensión
+    voltage_drop = validated_config.get("voltage_drop", {})
+    max_percentage = voltage_drop.get("max_percentage", 1.5)
+    
+    if not (0.1 <= max_percentage <= 10.0):
+        logger.warning(f"Caída de tensión {max_percentage}% fuera de rango válido (0.1-10%), usando 1.5%")
+        validated_config.setdefault("voltage_drop", {})["max_percentage"] = 1.5
+    
+    # Validar tensión de referencia
+    v_ref = voltage_drop.get("reference_voltage", 1500)
+    if v_ref <= 0:
+        logger.warning(f"Tensión de referencia inválida {v_ref}V, usando 1500V")
+        validated_config["voltage_drop"]["reference_voltage"] = 1500
+    
+    # Validar número de strings en paralelo
+    num_strings = validated_config.get("number_of_parallel_strings", 1)
+    if num_strings < 1:
+        logger.warning(f"Número de strings inválido {num_strings}, usando 1")
+        validated_config["number_of_parallel_strings"] = 1
+    elif num_strings > 100:
+        logger.warning(f"Número de strings muy alto {num_strings}, limitando a 100")
+        validated_config["number_of_parallel_strings"] = 100
+    
+    # Validar corriente ISC
+    isc_ref = validated_config.get("isc_ref", 0)
+    if isc_ref <= 0:
+        logger.error(f"Corriente ISC inválida: {isc_ref}A")
+        raise ValueError(f"La corriente ISC debe ser mayor a 0A, recibido: {isc_ref}A")
+    
+    return validated_config
+
+def get_grouping_factor_safe(normativa_config: dict, number_of_circuits: int, 
+                           method: str, layout: str) -> float:
+    """✅ FUNCIÓN MEJORADA: Obtiene factor de agrupamiento de forma segura"""
+    try:
+        grouping_corr = normativa_config.get("grouping_factors", {})
+        default_factor = 1.0
+        
+        if method not in grouping_corr:
+            logger.warning(f"Método de instalación '{method}' no encontrado, usando factor {default_factor}")
+            return default_factor
+        
+        method_data = grouping_corr[method]
+        group_table = {}
+        
+        # Extraer tabla de valores
+        if isinstance(method_data, dict):
+            if layout and layout in method_data and "values" in method_data[layout]:
+                group_table = method_data[layout]["values"]
+            elif "values" in method_data:
+                group_table = method_data["values"]
+            else:
+                # Buscar primera tabla disponible
+                for key, value in method_data.items():
+                    if isinstance(value, dict) and "values" in value:
+                        group_table = value["values"]
+                        logger.info(f"Usando tabla de agrupamiento '{key}' para método '{method}'")
+                        break
+        
+        if not group_table:
+            logger.warning(f"No se encontró tabla de agrupamiento para método '{method}', usando factor {default_factor}")
+            return default_factor
+        
+        # Búsqueda del factor
+        str_circuits = str(number_of_circuits)
+        
+        # 1. Búsqueda exacta
+        if str_circuits in group_table:
+            return float(group_table[str_circuits])
+        
+        # 2. Búsqueda por rangos (ej: "10+", "6+")
+        applicable_ranges = []
+        for key in group_table.keys():
+            if "+" in key:
+                try:
+                    threshold = int(key.replace("+", ""))
+                    if number_of_circuits >= threshold:
+                        applicable_ranges.append((threshold, float(group_table[key])))
+                except ValueError:
+                    continue
+        
+        if applicable_ranges:
+            applicable_ranges.sort(reverse=True)
+            factor = applicable_ranges[0][1]
+            logger.info(f"Usando factor de agrupamiento {factor} para {number_of_circuits} strings (rango aplicable)")
+            return factor
+        
+        # 3. Búsqueda por aproximación
+        numeric_keys = []
+        for key in group_table.keys():
+            try:
+                if "+" not in key:
+                    numeric_keys.append((int(key), float(group_table[key])))
+            except ValueError:
+                continue
+        
+        if numeric_keys:
+            closest = min(numeric_keys, key=lambda x: abs(x[0] - number_of_circuits))
+            factor = closest[1]
+            logger.warning(f"Número de strings {number_of_circuits} no encontrado exactamente, "
+                         f"usando factor {factor} del valor más cercano ({closest[0]} strings)")
+            return factor
+        
+        logger.warning(f"No se pudo determinar factor de agrupamiento para {number_of_circuits} strings, "
+                      f"usando factor por defecto {default_factor}")
+        return default_factor
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo factor de agrupamiento: {e}")
+        return 1.0
+
+def diagnose_config(config: dict) -> dict:
+    """✅ NUEVA: Función para diagnosticar problemas en la configuración"""
+    diagnosis = {
+        "status": "OK",
+        "warnings": [],
+        "errors": [],
+        "config_summary": {}
+    }
+    
+    try:
+        # Verificar parámetros críticos
+        if "isc_ref" not in config or config["isc_ref"] <= 0:
+            diagnosis["errors"].append(f"ISC de referencia inválida: {config.get('isc_ref', 'NO_DEFINIDA')}")
+        
+        voltage_drop = config.get("voltage_drop", {})
+        max_pct = voltage_drop.get("max_percentage")
+        v_ref = voltage_drop.get("reference_voltage")
+        
+        if not max_pct or not (0.1 <= max_pct <= 10):
+            diagnosis["warnings"].append(f"Caída de tensión fuera de rango: {max_pct}%")
+        
+        if not v_ref or v_ref <= 0:
+            diagnosis["errors"].append(f"Tensión de referencia inválida: {v_ref}V")
+        
+        num_strings = config.get("number_of_parallel_strings", 1)
+        if num_strings < 1 or num_strings > 100:
+            diagnosis["warnings"].append(f"Número de strings inusual: {num_strings}")
+        
+        diagnosis["config_summary"] = {
+            "isc_ref": config.get("isc_ref"),
+            "voltage_drop_pct": max_pct,
+            "reference_voltage": v_ref,
+            "parallel_strings": num_strings,
+            "normativa": SECTIONS_CONFIG.get("normativa_used")
+        }
+        
+        if diagnosis["errors"]:
+            diagnosis["status"] = "ERROR"
+        elif diagnosis["warnings"]:
+            diagnosis["status"] = "WARNING"
+            
+    except Exception as e:
+        diagnosis["status"] = "CRITICAL"
+        diagnosis["errors"].append(f"Error durante diagnóstico: {str(e)}")
+    
+    return diagnosis
 
 def validate_normativas_yaml():
     """Valida que el YAML de normativas tenga la estructura correcta"""
@@ -132,17 +498,24 @@ def load_sections_config(normativa: str = "IEC"):
     else:
         raise ValueError(f"La normativa '{normativa}' no tiene estructura de secciones válida")
 
-def get_normativa_config(normativa: str = "IEC"):
+def get_normativa_config_fixed(normativa: str = "IEC", project_name: str = None):
     """
-    Obtiene la configuración completa de una normativa
-    
-    Args:
-        normativa: Nombre de la normativa ("IEC", "NEC", "PERSONALIZADA")
-    
-    Returns:
-        Dict con toda la configuración de la normativa
+    ✅ FUNCIÓN ACTUALIZADA: Prioriza normativa del proyecto
     """
     try:
+        # 1. Si hay proyecto, buscar su normativa específica
+        if project_name:
+            project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+            if os.path.exists(project_normative_file):
+                try:
+                    with open(project_normative_file) as f:
+                        project_data = yaml.safe_load(f)
+                    logger.info(f"Usando normativa específica del proyecto: {project_name}")
+                    return project_data["normativa"]
+                except Exception as e:
+                    logger.warning(f"Error cargando normativa del proyecto, usando base: {e}")
+        
+        # 2. Usar normativa base
         with open("backend/configs/normativas.yaml") as f:
             yaml_data = yaml.safe_load(f)
         
@@ -151,11 +524,124 @@ def get_normativa_config(normativa: str = "IEC"):
             logger.warning(f"Normativa '{normativa}' no encontrada. Usando 'IEC'. Disponibles: {available}")
             normativa = "IEC"
         
+        logger.info(f"Usando normativa base: {normativa}")
         return yaml_data["normativas"][normativa]
     
     except Exception as e:
         logger.error(f"Error cargando configuración de normativa '{normativa}': {e}")
         raise
+
+def create_project_normative_copy(project_name: str, base_norm: str = "IEC"):
+    """
+    ✅ NUEVA: Crea copia completa de normativa en el proyecto
+    """
+    try:
+        # 1. Cargar normativa base
+        with open("backend/configs/normativas.yaml") as f:
+            yaml_data = yaml.safe_load(f)
+        
+        if base_norm not in yaml_data["normativas"]:
+            raise ValueError(f"Normativa base '{base_norm}' no encontrada")
+        
+        # 2. Crear copia completa
+        project_normative = {
+            "project_info": {
+                "project_name": project_name,
+                "based_on": base_norm,
+                "created_at": datetime.now().isoformat(),
+                "version": "1.0"
+            },
+            "normativa": deepcopy(yaml_data["normativas"][base_norm])
+        }
+        
+        # 3. Guardar en el proyecto
+        project_dir = f"backend/projects/{project_name}"
+        os.makedirs(project_dir, exist_ok=True)
+        
+        normative_file = f"{project_dir}/normativa.yaml"
+        with open(normative_file, 'w') as f:
+            yaml.dump(project_normative, f, default_flow_style=False, indent=2)
+        
+        logger.info(f"Copia de normativa creada: {normative_file}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creando copia de normativa: {e}")
+        return False
+
+def update_project_normative(project_name: str, yaml_overrides: dict, base_norm: str = "IEC"):
+    """
+    ✅ NUEVA: Actualiza normativa específica del proyecto
+    """
+    try:
+        project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+        
+        # 1. Si no existe copia, crearla
+        if not os.path.exists(project_normative_file):
+            logger.info(f"Creando primera copia de normativa para: {project_name}")
+            if not create_project_normative_copy(project_name, base_norm):
+                return False
+        
+        # 2. Cargar normativa actual del proyecto
+        with open(project_normative_file) as f:
+            project_data = yaml.safe_load(f)
+        
+        # 3. Aplicar cambios directamente a la normativa
+        normativa = project_data["normativa"]
+        
+        for section_name, section_data in yaml_overrides.items():
+            if section_name in normativa:
+                if isinstance(section_data, dict) and isinstance(normativa[section_name], dict):
+                    # Merge profundo
+                    normativa[section_name].update(section_data)
+                else:
+                    # Reemplazo directo
+                    normativa[section_name] = section_data
+                logger.info(f"Actualizada sección: {section_name}")
+            else:
+                logger.warning(f"Sección no encontrada: {section_name}")
+        
+        # 4. Actualizar metadatos
+        project_data["project_info"]["last_modified"] = datetime.now().isoformat()
+        project_data["project_info"]["version"] = str(float(project_data["project_info"]["version"]) + 0.1)
+        
+        # 5. Guardar normativa actualizada
+        with open(project_normative_file, 'w') as f:
+            yaml.dump(project_data, f, default_flow_style=False, indent=2)
+        
+        logger.info(f"Normativa del proyecto actualizada: {project_normative_file}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error actualizando normativa del proyecto: {e}")
+        return False
+
+def reset_project_normative(project_name: str):
+    """
+    ✅ NUEVA: Elimina normativa del proyecto (vuelve a usar base)
+    """
+    try:
+        project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+        
+        if os.path.exists(project_normative_file):
+            os.remove(project_normative_file)
+            logger.info(f"Normativa del proyecto eliminada: {project_normative_file}")
+            return True
+        else:
+            logger.info(f"No había normativa personalizada para: {project_name}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error eliminando normativa del proyecto: {e}")
+        return False
+def get_normativa_config(normativa: str = "IEC"):
+    """
+    Obtiene la configuración completa de una normativa
+    """
+    return get_normativa_config_fixed(normativa)
+
+# ===== INICIALIZAR VARIABLES GLOBALES =====
+# Agregar antes de las funciones que usan SECTIONS_CONFIG y MATERIALS
 
 # Cargar secciones al inicializar el módulo (usando IEC por defecto)
 try:
@@ -175,6 +661,21 @@ try:
 except Exception as e:
     logger.error(f"ERROR CRÍTICO: No se pudieron cargar las propiedades de materiales: {e}")
     raise RuntimeError(f"Error cargando propiedades de materiales: {e}")
+
+# ===== CORRECCIÓN EN apply_correction_factors =====
+# BUSCAR esta línea en tu función apply_correction_factors:
+# normativa_config = get_normativa_config(SECTIONS_CONFIG.get("normativa_used", "IEC"))
+
+# REEMPLAZAR por:
+# normativa_config = get_normativa_config_fixed(SECTIONS_CONFIG.get("normativa_used", "IEC"))
+
+# Y AGREGAR inmediatamente después:
+# # Validar estructura si es personalizada
+# if SECTIONS_CONFIG.get("normativa_used") == "PERSONALIZADA":
+#     if not validate_custom_normativa_structure(normativa_config):
+#         logger.warning("Estructura de normativa personalizada inválida, usando factores por defecto")
+#         return i_nominal * 1.25
+
 
 def get_available_sections(circuit_type: str = "dc_strings") -> List[float]:
     """Obtiene las secciones disponibles para un tipo de circuito específico"""
@@ -228,53 +729,100 @@ def get_material_resistivity(material_name: str, temp_operating: float) -> float
     return resistivity_temp
 
 def apply_correction_factors(i_nominal: float, config: dict) -> float:
-    """Aplica factores de corrección por temperatura y agrupamiento usando configuración de normativa"""
+    """✅ FUNCIÓN MEJORADA: Aplica factores de corrección de forma segura"""
     try:
-        # Usar factores de corrección de la normativa cargada
-        normativa_config = get_normativa_config(SECTIONS_CONFIG.get("normativa_used", "IEC"))
+        # Validar entrada
+        if i_nominal <= 0:
+            raise ValueError(f"Corriente nominal inválida: {i_nominal}A")
         
-        temp_corr = normativa_config["temperature_correction"]
-        grouping_corr = normativa_config["grouping_factors"]
+        # Cargar configuración de normativa
+        # Obtener project_name del contexto o config
+        project_name = config.get("project_name") or config.get("_metadata", {}).get("project_name")
+        normativa_name = SECTIONS_CONFIG.get("normativa_used", "IEC")
 
-        current_ambient = config.get("current_ambient", temp_corr["ambient_design"])
-        temp_factor = temp_corr["values"].get(str(current_ambient), 1.0)
-
-        method = config.get("method", normativa_config["installation"]["method"])
-        layout = config.get("layout", normativa_config["installation"]["layout"])
-        number_of_circuits = config.get("number_of_parallel_strings", 1)
-
-        if method == "buried" and layout in grouping_corr[method]:
-            group_table = grouping_corr[method][layout]["values"]
-        elif method in grouping_corr:
-            group_table = grouping_corr[method]["values"]
+        # ✅ Solo usar normativa del proyecto para cálculos de strings
+        if normativa_name == "PERSONALIZADA" and project_name:
+            normativa_config = get_normativa_config_fixed(normativa_name, project_name)
         else:
-            logger.warning(f"Método '{method}' no encontrado en factores de agrupamiento, usando factor 1.0")
-            group_table = {"1": 1.0}
+            # Para otros tipos de cálculos, usar normativa base
+            normativa_config = get_normativa_config_fixed(normativa_name)
 
-        group_factor = 1.0
-        if str(number_of_circuits) in group_table:
-            group_factor = group_table[str(number_of_circuits)]
-        elif "10+" in group_table and number_of_circuits >= 10:
-            group_factor = group_table["10+"]
-        elif "6+" in group_table and number_of_circuits >= 6:
-            group_factor = group_table["6+"]
-        elif "4+" in group_table and number_of_circuits >= 4:
-            group_factor = group_table["4+"]
-
+        # Validar estructura si es personalizada
+        if SECTIONS_CONFIG.get("normativa_used") == "PERSONALIZADA":
+            if not validate_custom_normativa_structure(normativa_config):
+                logger.warning("Estructura de normativa personalizada inválida, usando factores por defecto")
+                return i_nominal * 1.25
+        
+        temp_corr = normativa_config.get("temperature_correction", {})
+        
+        # Factor de temperatura seguro
+        current_ambient = config.get("current_ambient", temp_corr.get("ambient_design", 30))
+        temp_factor = 1.0
+        
+        if "values" in temp_corr and temp_corr["values"]:
+            temp_values = temp_corr["values"]
+            
+            # Búsqueda exacta
+            if str(current_ambient) in temp_values:
+                temp_factor = float(temp_values[str(current_ambient)])
+            else:
+                # Interpolación o valor más cercano
+                available_temps = []
+                for temp_str in temp_values.keys():
+                    try:
+                        available_temps.append((int(temp_str), float(temp_values[temp_str])))
+                    except ValueError:
+                        continue
+                
+                if available_temps:
+                    available_temps.sort()
+                    
+                    # Interpolación lineal si está entre dos valores
+                    for i in range(len(available_temps) - 1):
+                        temp1, factor1 = available_temps[i]
+                        temp2, factor2 = available_temps[i + 1]
+                        
+                        if temp1 <= current_ambient <= temp2:
+                            temp_factor = factor1 + (factor2 - factor1) * (current_ambient - temp1) / (temp2 - temp1)
+                            logger.info(f"Factor de temperatura interpolado: {temp_factor:.3f} para {current_ambient}°C")
+                            break
+                    else:
+                        # Usar el más cercano si no está en rango
+                        closest = min(available_temps, key=lambda x: abs(x[0] - current_ambient))
+                        temp_factor = closest[1]
+                        logger.warning(f"Temperatura {current_ambient}°C fuera de rango, usando factor {temp_factor} ({closest[0]}°C)")
+        
+        # Factor de agrupamiento seguro
+        method = config.get("method", normativa_config.get("installation", {}).get("method", "conduit"))
+        layout = config.get("layout", normativa_config.get("installation", {}).get("layout", "trefoil"))
+        number_of_circuits = config.get("number_of_parallel_strings", 1)
+        
+        group_factor = get_grouping_factor_safe(normativa_config, number_of_circuits, method, layout)
+        
+        # Validación final
+        if temp_factor <= 0:
+            logger.error(f"Factor de temperatura inválido: {temp_factor}, usando 1.0")
+            temp_factor = 1.0
+        
+        if group_factor <= 0:
+            logger.error(f"Factor de agrupamiento inválido: {group_factor}, usando 1.0")
+            group_factor = 1.0
+        
+        # Aplicar corrección
         i_adjusted = i_nominal / (temp_factor * group_factor)
         
         logger.debug(f"Corrección de corriente: {i_nominal:.2f}A → {i_adjusted:.2f}A "
-                    f"(temp_factor: {temp_factor}, group_factor: {group_factor})")
+                    f"(temp_factor: {temp_factor:.3f}, group_factor: {group_factor:.3f})")
         
         return i_adjusted
-    
-    except KeyError as e:
-        logger.warning(f"Configuración incompleta en factores de corrección: {e}. Usando factor 1.0")
-        return i_nominal
+        
     except Exception as e:
         logger.error(f"Error aplicando factores de corrección: {e}")
-        return i_nominal
-
+        safety_factor = 1.25
+        result = i_nominal * safety_factor
+        logger.warning(f"Usando corrección de seguridad: {i_nominal:.2f}A → {result:.2f}A (factor {safety_factor})")
+        return result
+    
 def get_commercial_section(theoretical_section_mm2: float, circuit_type: str = "dc_strings") -> Optional[float]:
     """
     Encuentra la sección comercial inmediatamente superior a la teórica.
@@ -301,82 +849,89 @@ def get_commercial_section(theoretical_section_mm2: float, circuit_type: str = "
 
 
 def calculate_string_section(row: pd.Series, config: dict, circuit_type: str = "dc_strings") -> dict:
-    """
-    Calcula la sección de conductor para un string individual usando configuración de normativa
-    
-    CORRECCIONES APLICADAS:
-    - Fórmula corregida para cálculo de sección teórica
-    - Uso correcto de unidades de resistividad (valores corregidos en YAML)
-    - Cálculo consistente de caída de tensión
-    """
-
+    """✅ FUNCIÓN MEJORADA: Calcula sección con validaciones robustas"""
     try:
-        # Obtener configuración de normativa
-        normativa_config = get_normativa_config(SECTIONS_CONFIG.get("normativa_used", "IEC"))
-
-        # Extraer datos del row de forma segura
+        # Validar configuración
+        config = validate_config_parameters(config)
+        # ✅ DEBUG: Verificar qué normativa se está usando
+        project_name = config.get("project_name")
+        if project_name:
+            project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+            if os.path.exists(project_normative_file):
+                logger.info(f"🔥 USANDO NORMATIVA DEL PROYECTO: {project_normative_file}")
+                # Verificar algunos parámetros clave
+                with open(project_normative_file) as f:
+                    project_data = yaml.safe_load(f)
+                normativa = project_data["normativa"]
+                logger.info(f"🔥 Parámetros del proyecto - ISC factor: {normativa.get('correction_factors', {}).get('isc_safety_factor', 'NO_FOUND')}")
+                logger.info(f"🔥 Parámetros del proyecto - Max voltage drop: {normativa.get('voltage_drop', {}).get('max_percentage', 'NO_FOUND')}%")
+            else:
+                logger.info(f"🔥 USANDO NORMATIVA BASE - No existe: {project_normative_file}")
+        
         string_id = str(row.get("string_id", "UNKNOWN"))
         length_pos = float(row.get("length_pos_m", 0))
         length_neg = float(row.get("length_neg_m", 0))
 
-        # Validar datos de entrada
+        # Validar longitudes
         if length_pos <= 0 or length_neg <= 0:
             raise ValueError(f"Longitudes inválidas: pos={length_pos}m, neg={length_neg}m")
+        
+        if length_pos > 10000 or length_neg > 10000:
+            raise ValueError(f"Longitudes excesivas: pos={length_pos}m, neg={length_neg}m (máximo 10km)")
 
-        # Cálculo corriente ajustada usando config de normativa
-        isc_safety_factor = normativa_config["correction_factors"]["isc_safety_factor"]
+        # Cálculos con validación
+        isc_safety_factor = config.get("isc_correction", 1.25)
         i_nominal = config["isc_ref"] * isc_safety_factor
+        
+        # Aplicar factores de corrección de forma segura
         i_adj = apply_correction_factors(i_nominal, config)
-
-        # Longitud total (ida y vuelta)
+        
+        # Longitud total
         length_total = length_pos + length_neg
 
-        # ✅ CORRECCIÓN: Obtener resistividad en Ω·mm²/m (valores ahora corregidos en YAML)
-        material = config.get("cable_material", "copper")
-        temp_operating = config.get("current_ambient", 30)
+        # Obtener resistividad
+        material = config.get("cable", {}).get("material", "copper")
+        temp_operating = config.get("correction_factors", {}).get("ambient_temperature", {}).get("current_ambient", 30)
         resistivity_ohm_mm2_per_m = get_material_resistivity(material, temp_operating)
 
-        # Parámetros de caída de tensión de la normativa
-        max_percentage = normativa_config["voltage_drop"]["max_percentage"]
-        v_ref = config.get("reference_voltage", normativa_config["voltage_drop"]["reference_voltage"])
+        # Parámetros de caída de tensión validados
+        max_percentage = config["voltage_drop"]["max_percentage"]
+        v_ref = config["voltage_drop"]["reference_voltage"]
         
-        # ✅ CORRECCIÓN: Caída de tensión permitida en voltios
         max_voltage_drop_v = v_ref * (max_percentage / 100)
-
-        # ✅ CORRECCIÓN: Fórmula corregida para sección teórica
-        # S = (2 × ρ × L × I) / ΔV
-        # Donde:
-        # - ρ está en Ω·mm²/m (ahora valores corregidos ~0.017 para cobre)
-        # - L está en m (longitud total ida y vuelta)
-        # - I está en A
-        # - ΔV está en V (caída máxima permitida)
-        # - S resulta en mm²
         
-        s_teorica_mm2 = (2 * resistivity_ohm_mm2_per_m * length_total * i_adj) / max_voltage_drop_v
-
-        # Selección de sección comercial
+        # Validar antes de dividir
+        if max_voltage_drop_v <= 0:
+            raise ValueError(f"Caída de tensión máxima inválida: {max_voltage_drop_v}V")
+        
+        # Cálculo de sección teórica
+        numerator = 2 * resistivity_ohm_mm2_per_m * length_total * i_adj
+        s_teorica_mm2 = numerator / max_voltage_drop_v
+        
+        # Validar resultado
+        if s_teorica_mm2 <= 0:
+            raise ValueError(f"Sección teórica inválida: {s_teorica_mm2}mm²")
+        
+        if s_teorica_mm2 > 1000:
+            logger.warning(f"Sección teórica muy alta: {s_teorica_mm2:.1f}mm² para string {string_id}")
+        
+        # Obtener sección comercial
         s_comercial_mm2 = get_commercial_section(s_teorica_mm2, circuit_type)
 
-        # ✅ CORRECCIÓN: Calcular parámetros finales con sección comercial
-        if s_comercial_mm2:
-            # Caída de tensión real con sección comercial
+        if s_comercial_mm2 and s_comercial_mm2 > 0:
+            # Cálculos finales
             v_drop_real = (2 * resistivity_ohm_mm2_per_m * length_total * i_adj) / s_comercial_mm2
             v_drop_pct = (v_drop_real / v_ref) * 100
-            
-            # Resistencia total del conductor
             resistance_total = (2 * resistivity_ohm_mm2_per_m * length_total) / s_comercial_mm2
-            
-            # Pérdidas por efecto Joule
             joule_losses = (i_adj ** 2) * resistance_total
 
-            # Estado de validación
+            # Estado de la caída de tensión
             if v_drop_pct <= max_percentage:
                 voltage_status = "OK"
             elif v_drop_pct <= max_percentage * 1.1:
                 voltage_status = "WARNING"
             else:
                 voltage_status = "CRITICAL"
-
         else:
             v_drop_real = None
             v_drop_pct = None
@@ -384,7 +939,7 @@ def calculate_string_section(row: pd.Series, config: dict, circuit_type: str = "
             voltage_status = "NO_SECTION"
             resistance_total = None
 
-        # Construir resultado
+        # Resultado completo
         result = {
             "string_id": string_id,
             "length_total_m": round(length_total, 2),
@@ -403,10 +958,11 @@ def calculate_string_section(row: pd.Series, config: dict, circuit_type: str = "
             "voltage_status": voltage_status,
             "circuit_type": circuit_type,
             "normativa": SECTIONS_CONFIG["normativa_used"],
-            "cable_material": material
+            "cable_material": material,
+            "calculation_status": "SUCCESS"
         }
 
-        logger.debug(f"String {string_id} calculado exitosamente con normativa {SECTIONS_CONFIG['normativa_used']}")
+        logger.debug(f"String {string_id} calculado exitosamente")
         return result
 
     except Exception as e:
@@ -414,10 +970,9 @@ def calculate_string_section(row: pd.Series, config: dict, circuit_type: str = "
         return {
             "string_id": str(row.get("string_id", "UNKNOWN")),
             "error": str(e),
-            "status": "ERROR",
+            "calculation_status": "ERROR",
             "normativa": SECTIONS_CONFIG.get("normativa_used", "UNKNOWN")
         }
-
 
 def calculate_all_strings(df: pd.DataFrame, config: dict, circuit_type: str = "dc_strings") -> List[dict]:
     """Calcula todas las strings del DataFrame usando configuración de normativa"""
@@ -517,4 +1072,33 @@ def calcular_seccion_minima_simple(corriente_a, longitud_m, caida_pct, tension_v
     
     return round(seccion_mm2, 3)
 
-# ✅ Función de verificación removida - usar tests de pytest para validación
+def test_custom_normativa():
+    """
+    Prueba la carga de normativa personalizada
+    """
+    print("🧪 Probando carga de normativa personalizada...")
+    
+    # Diagnóstico inicial
+    diagnosis = diagnose_normativa_structure("PERSONALIZADA")
+    print(f"Diagnóstico: {diagnosis}")
+    
+    if diagnosis["status"] == "OK":
+        print("✅ Normativa personalizada cargada correctamente")
+        
+        # Probar configuración problemática
+        test_config = {
+            "isc_ref": 15.5,
+            "number_of_parallel_strings": 2,  # Valor del JSON
+            "voltage_drop": {"max_percentage": 1.5, "reference_voltage": 1500},
+            "current_ambient": 35,
+            "method": "buried",
+            "layout": "single_layer"
+        }
+        
+        try:
+            result = apply_correction_factors(15.5, test_config)
+            print(f"✅ Cálculo exitoso: corriente ajustada = {result:.2f}A")
+        except Exception as e:
+            print(f"❌ Error en cálculo: {e}")
+    else:
+        print(f"❌ Problemas en normativa: {diagnosis['errors']}")

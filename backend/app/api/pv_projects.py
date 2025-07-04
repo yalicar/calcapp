@@ -1,4 +1,4 @@
-# backend/routes/pv_projects.py
+# backend/app/api/pv_projects.py
 """
 PV PROJECT MANAGEMENT ROUTES
 

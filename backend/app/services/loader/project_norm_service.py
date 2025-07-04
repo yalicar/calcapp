@@ -17,10 +17,18 @@ class ProjectNormService:
         """Obtiene la ruta del archivo de overrides del proyecto"""
         return self.projects_base_path / project_name / "norm_overrides.json"
     
-    def has_project_overrides(self, project_name: str) -> bool:
-        """Verifica si el proyecto tiene parámetros personalizados"""
-        overrides_path = self.get_project_overrides_path(project_name)
-        return overrides_path.exists()
+    def has_stage_override(project_name: str, stage: str) -> bool:
+        """
+        Verifica si existe una normativa personalizada para una etapa específica del proyecto.
+        """
+        from pathlib import Path
+        try:
+            path = Path("projects") / project_name / "normativas" / f"{stage}.yaml"
+            return path.exists()
+        except Exception as e:
+            logger.error(f"Error verificando override para etapa '{stage}' en proyecto '{project_name}': {e}")
+            return False
+
     
     def load_project_overrides(self, project_name: str) -> Optional[ProjectNormOverrides]:
         """Carga los overrides del proyecto si existen"""
@@ -39,6 +47,29 @@ class ProjectNormService:
             logger.error(f"Error cargando overrides del proyecto {project_name}: {e}")
             return None
     
+    def load_stage_override(self, project_name: str, stage: str) -> Optional[Dict[str, Any]]:
+        """
+        Carga los parámetros personalizados de una etapa específica si existen.
+
+        Args:
+            project_name: Nombre del proyecto
+            stage: Etapa (dc_strings, ac_circuits, etc.)
+
+        Returns:
+            Diccionario con parámetros personalizados o None si no existe.
+        """
+        try:
+            stage_file = Path(f"projects/{project_name}/normativas/{stage}.yaml")
+            if not stage_file.exists():
+                return None
+
+            with open(stage_file, 'r', encoding='utf-8') as f:
+                return yaml.safe_load(f)
+
+        except Exception as e:
+            logger.error(f"Error loading stage YAML for {project_name} / {stage}: {e}")
+            return None
+
     def save_project_overrides(self, project_name: str, base_norm: str, modified_parameters: Dict[str, Any]) -> bool:
         """Guarda los parámetros modificados del proyecto"""
         try:
