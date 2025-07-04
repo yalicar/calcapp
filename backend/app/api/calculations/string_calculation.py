@@ -10,6 +10,57 @@ from app.utils.filesystem import load_excel_sheet
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# 🔥 NUEVA FUNCIÓN: Extraer factores reales usados en el cálculo
+def extract_real_factors_from_config(config: dict) -> dict:
+    """
+    Extrae los factores reales que se usaron en el cálculo desde la configuración.
+    
+    Args:
+        config: Configuración completa del cálculo
+        
+    Returns:
+        dict: Factores reales extraídos
+    """
+    try:
+        factors = {}
+        
+        # 1. Factores de corrección
+        correction_factors = config.get('correction_factors', {})
+        factors['parallel_strings'] = correction_factors.get('parallel_strings', 1)
+        factors['isc_safety_factor'] = correction_factors.get('isc_safety_factor', 1.25)
+        
+        # 2. Parámetros de instalación
+        installation = config.get('installation', {})
+        factors['installation_method'] = installation.get('method', 'conduit')
+        factors['installation_depth'] = installation.get('depth_cm', 50)
+        
+        # 3. Parámetros de temperatura
+        temp_correction = config.get('temperature_correction', {})
+        factors['ambient_design_temp'] = temp_correction.get('ambient_design', 25)
+        
+        # 4. Cable
+        cable = config.get('cable', {})
+        factors['cable_material'] = cable.get('material', 'copper')
+        factors['cable_max_temp'] = cable.get('max_temp', 90)
+        
+        # 5. Caída de tensión
+        voltage_drop = config.get('voltage_drop', {})
+        factors['max_voltage_drop_pct'] = voltage_drop.get('max_percentage', 5)
+        
+        # 6. Información de overrides
+        metadata = config.get('_metadata', {})
+        normativa_config = metadata.get('normativa_config', {})
+        factors['has_project_overrides'] = normativa_config.get('has_project_overrides', False)
+        factors['overrides_source'] = normativa_config.get('overrides_source', 'none')
+        
+        logger.info(f"🔥 Factores reales extraídos: parallel_strings={factors['parallel_strings']}, ambient_temp={factors['ambient_design_temp']}")
+        
+        return factors
+        
+    except Exception as e:
+        logger.error(f"Error extrayendo factores reales: {e}")
+        return {}
+
 # ==============================================================================
 # 📘 Endpoint IEC - Cálculo de strings con normativa IEC
 # ==============================================================================
@@ -41,6 +92,9 @@ def calculate_iec_strings(project_name: str):
 
         results = calculate_all_strings(df, config, circuit_type="dc_strings")
 
+        # 🔥 NUEVO: Extraer factores reales usados
+        real_factors = extract_real_factors_from_config(config)
+
         return {
             "project_name": project_name,
             "circuit_type": "dc_strings",
@@ -55,8 +109,16 @@ def calculate_iec_strings(project_name: str):
                 "isc_correction": config.get('isc_correction', 1.25),
                 "cable_material": config['cable']['material'],
                 "installation_method": config['installation']['method'],
-                "max_voltage_drop": config['voltage_drop']['max_percentage']
+                "max_voltage_drop": config['voltage_drop']['max_percentage'],
+                # 🔥 NUEVOS: Factores reales extraídos desde la configuración
+                "parallel_strings": real_factors.get('parallel_strings', 1),
+                "installation_depth": real_factors.get('installation_depth', 50),
+                "ambient_design_temp": real_factors.get('ambient_design_temp', 25),
+                "cable_max_temp": real_factors.get('cable_max_temp', 90),
+                "overrides_source": real_factors.get('overrides_source', 'none')
             },
+            # 🔥 NUEVO: Sección dedicada a factores de cálculo detallados
+            "calculation_factors": real_factors,
             "results": results,
             "summary": {
                 "total_circuits": len(results),
@@ -105,6 +167,9 @@ def calculate_nec_strings(project_name: str):
 
         results = calculate_all_strings(df, config, circuit_type="dc_strings")
 
+        # 🔥 NUEVO: Extraer factores reales usados también para NEC
+        real_factors = extract_real_factors_from_config(config)
+
         return {
             "project_name": project_name,
             "normative": "NEC",
@@ -119,8 +184,16 @@ def calculate_nec_strings(project_name: str):
                 "isc_correction": config.get('isc_correction', 1.25),
                 "cable_material": config['cable']['material'],
                 "installation_method": config['installation']['method'],
-                "max_voltage_drop": config['voltage_drop']['max_percentage']
+                "max_voltage_drop": config['voltage_drop']['max_percentage'],
+                # 🔥 NUEVOS: Factores reales extraídos desde la configuración
+                "parallel_strings": real_factors.get('parallel_strings', 1),
+                "installation_depth": real_factors.get('installation_depth', 50),
+                "ambient_design_temp": real_factors.get('ambient_design_temp', 25),
+                "cable_max_temp": real_factors.get('cable_max_temp', 90),
+                "overrides_source": real_factors.get('overrides_source', 'none')
             },
+            # 🔥 NUEVO: Sección dedicada a factores de cálculo detallados
+            "calculation_factors": real_factors,
             "results": results,
             "summary": {
                 "total_circuits": len(results),
