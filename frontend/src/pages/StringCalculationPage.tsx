@@ -1,3 +1,4 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
@@ -16,6 +17,7 @@ import {
   FormControlLabel
 } from "@mui/material";
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArticleIcon from '@mui/icons-material/Article';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import { useProject } from "../context/ProjectContext";
 
@@ -136,7 +138,7 @@ function StringCalculationPage() {
       console.log('📤 Sending YAML overrides:', yamlOverrides);
 
       const response = await fetch(
-        `http://localhost:8000/calculations/projects/${currentProjectName}/normative-parameters`,
+        `http://localhost:8000/calculations/projects/${currentProjectName}/normatives/dc_strings/parameters`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -180,7 +182,7 @@ function StringCalculationPage() {
     try {
       console.log(`🔧 Loading normative config for: ${currentProjectName}`);
       const response = await fetch(
-        `http://localhost:8000/calculations/projects/${currentProjectName}/normative-parameters?normative=${norm}&circuit_type=dc_strings`
+        `http://localhost:8000/calculations/projects/${currentProjectName}/normatives/dc_strings/parameters`
       );
       
       if (response.ok) {
@@ -235,7 +237,7 @@ function StringCalculationPage() {
 
       // Guardar como normativa personalizada
       const response = await fetch(
-        `http://localhost:8000/calculations/projects/${currentProjectName}/normative-parameters`,
+        `http://localhost:8000/calculations/projects/${currentProjectName}/normatives/dc_strings/parameters`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -279,7 +281,7 @@ function StringCalculationPage() {
       console.log(`🔄 Resetting normative for: ${currentProjectName}`);
       
       const response = await fetch(
-        `http://localhost:8000/calculations/projects/${currentProjectName}/normative-parameters`,
+        `http://localhost:8000/calculations/projects/${currentProjectName}/normatives/dc_strings/parameters`,
         { method: 'DELETE' }
       );
 
@@ -311,7 +313,7 @@ function StringCalculationPage() {
       console.log(`📡 API normative parameter: ${normativeForAPI}`);
       
       const response = await fetch(
-        `http://localhost:8000/calculations/calculate-strings/${currentProjectName}?normative=${normativeForAPI}&circuit_type=dc_strings`
+        `http://localhost:8000/calculations/calculate-iec-strings/${currentProjectName}`
       );
       
       if (response.ok) {

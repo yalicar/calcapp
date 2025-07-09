@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Módulos principales
-from app.api import pv_projects, pv_data
+from app.api import pv_projects, pv_data, reports
 
 # Nuevo router modular para cálculos (IEC, NEC, parámetros, status)
 from app.api.calculations import router as calculations_router
@@ -20,7 +20,7 @@ app = FastAPI(
 # ------------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Ajustar si cambia el frontend
+    allow_origins=["*"],  # Ajustar si cambia el frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,6 +50,8 @@ app.include_router(
     prefix="/calculations"
     # Los tags vienen de cada subrouter (IEC, NEC, Parameters, Status)
 )
+
+app.include_router(reports.router, prefix="/api/reports", tags=["Reportes PDF"])
 
 # ------------------------------------------------------------------------------
 # Endpoints básicos

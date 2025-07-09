@@ -2,6 +2,10 @@
 
 from fastapi import APIRouter, HTTPException
 import logging
+import json
+import os
+from datetime import datetime
+from pathlib import Path
 from app.services.loader.project_loader import extract_project_info
 from app.services.config_loader import build_calculation_config
 from app.services.calculation.string_calculator import calculate_all_strings
@@ -9,6 +13,32 @@ from app.utils.filesystem import load_excel_sheet
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+def save_calculation_results(project_name: str, circuit_type: str, normative: str, results: dict):
+    """Guarda los resultados de cálculo en JSON"""
+    try:
+        # Crear directorio de resultados
+        results_dir = Path(f"backend/projects/{project_name}/results")
+        results_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Nombre del archivo: dc_strings_iec.json
+        filename = f"{circuit_type}_{normative.lower()}.json"
+        file_path = results_dir / filename
+        
+        # Agregar timestamp
+        results["saved_at"] = datetime.now().isoformat()
+        results["file_type"] = "calculation_results"
+        
+        # Guardar
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"✅ Resultados guardados en: {file_path}")
+        return str(file_path)
+        
+    except Exception as e:
+        logger.error(f"❌ Error guardando resultados: {e}")
+        return None
 
 # 🔥 NUEVA FUNCIÓN: Extraer factores reales usados en el cálculo
 def extract_real_factors_from_config(config: dict) -> dict:
@@ -95,7 +125,7 @@ def calculate_iec_strings(project_name: str):
         # 🔥 NUEVO: Extraer factores reales usados
         real_factors = extract_real_factors_from_config(config)
 
-        return {
+        response_data = {
             "project_name": project_name,
             "circuit_type": "dc_strings",
             "normative": "IEC",
@@ -127,6 +157,11 @@ def calculate_iec_strings(project_name: str):
             },
             "metadata": config['_metadata']
         }
+
+        # 💾 GUARDAR RESULTADOS
+        save_calculation_results(project_name, "dc_strings", "IEC", response_data)
+
+        return response_data
 
     except ValueError as e:
         logger.error(f"[IEC] Error de validación: {e}")
@@ -170,7 +205,7 @@ def calculate_nec_strings(project_name: str):
         # 🔥 NUEVO: Extraer factores reales usados también para NEC
         real_factors = extract_real_factors_from_config(config)
 
-        return {
+        response_data = {
             "project_name": project_name,
             "normative": "NEC",
             "circuit_type": "dc_strings",
@@ -203,6 +238,11 @@ def calculate_nec_strings(project_name: str):
             "metadata": config['_metadata']
         }
 
+        # 💾 GUARDAR RESULTADOS
+        save_calculation_results(project_name, "dc_strings", "NEC", response_data)
+
+        return response_data
+
     except FileNotFoundError as e:
         logger.error(f"[NEC] Archivo no encontrado: {e}")
         raise HTTPException(status_code=404, detail="Proyecto o archivo Excel no encontrado")
@@ -212,3 +252,94 @@ def calculate_nec_strings(project_name: str):
     except Exception as e:
         logger.error(f"[NEC] Error inesperado: {e}")
         raise HTTPException(status_code=500, detail=f"Error en cálculo NEC: {str(e)}")
+
+# ==============================================================================
+# 📁 NUEVO: Endpoint para obtener resultados guardados
+# ==============================================================================
+@router.get("/get-saved-results/{project_name}/{circuit_type}/{normative}")
+def get_saved_results(project_name: str, circuit_type: str, normative: str):
+    """
+    Obtiene resultados de cálculo guardados previamente
+    
+    Args:
+        project_name: Nombre del proyecto
+        circuit_type: Tipo de circuito (dc_strings, level_1_dc, ac_circuits, mv_circuits)
+        normative: Normativa (IEC, NEC)
+    
+    Returns:
+        Resultados guardados en JSON
+    """
+    try:
+        file_path = Path(f"backend/projects/{project_name}/results/{circuit_type}_{normative.lower()}.json")
+        
+        if file_path.exists():
+            with open(file_path, "r", encoding="utf-8") as f:
+                results = json.load(f)
+            
+            logger.info(f"✅ Resultados cargados desde: {file_path}")
+            return results
+        else:
+            logger.warning(f"⚠️ No se encontraron resultados guardados: {file_path}")
+            raise HTTPException(status_code=404, detail=f"No hay resultados guardados para {circuit_type}_{normative}")
+            
+    except json.JSONDecodeError as e:
+        logger.error(f"❌ Error decodificando JSON: {e}")
+        raise HTTPException(status_code=500, detail="Archivo de resultados corrupto")
+    except Exception as e:
+        logger.error(f"❌ Error cargando resultados: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# ==============================================================================
+# 📂 NUEVO: Endpoint para listar resultados disponibles
+# ==============================================================================
+@router.get("/list-saved-results/{project_name}")
+def list_saved_results(project_name: str):
+    """
+    Lista todos los resultados guardados para un proyecto
+    
+    Args:
+        project_name: Nombre del proyecto
+        
+    Returns:
+        Lista de archivos de resultados disponibles
+    """
+    try:
+        results_dir = Path(f"backend/projects/{project_name}/results")
+        
+        if not results_dir.exists():
+            return {
+                "project_name": project_name,
+                "available_results": [],
+                "total_files": 0
+            }
+        
+        available_files = []
+        for file_path in results_dir.glob("*.json"):
+            try:
+                # Leer metadata del archivo
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                file_info = {
+                    "filename": file_path.name,
+                    "circuit_type": data.get("circuit_type", "unknown"),
+                    "normative": data.get("normative", "unknown"),
+                    "saved_at": data.get("saved_at", "unknown"),
+                    "total_circuits": data.get("summary", {}).get("total_circuits", 0),
+                    "file_size_kb": round(file_path.stat().st_size / 1024, 2)
+                }
+                available_files.append(file_info)
+                
+            except Exception as e:
+                logger.warning(f"Error leyendo archivo {file_path}: {e}")
+                continue
+        
+        return {
+            "project_name": project_name,
+            "available_results": available_files,
+            "total_files": len(available_files)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error listando resultados: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
