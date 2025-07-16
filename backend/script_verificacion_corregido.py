@@ -24,7 +24,7 @@ def verificar_factores_proyecto(project_name: str):
     print(f"🔍 === FACTORES DE CORRECCIÓN DISPONIBLES: {project_name} ===")
     
     try:
-        project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+        project_normative_file = f"projects/{project_name}/normativa.yaml"
         
         if os.path.exists(project_normative_file):
             with open(project_normative_file, 'r', encoding='utf-8') as f:
@@ -32,7 +32,7 @@ def verificar_factores_proyecto(project_name: str):
             normativa_config = normativa_data['normativa']
             print(f"📋 Usando normativa del proyecto")
         else:
-            with open('backend/configs/normativas.yaml', 'r', encoding='utf-8') as f:
+            with open('configs/normativas.yaml', 'r', encoding='utf-8') as f:
                 normativas_config = yaml.safe_load(f)
             normativa_config = normativas_config['normativas']['IEC']
             print(f"📋 Usando normativa base IEC")
@@ -71,7 +71,7 @@ def verificar_factores_proyecto(project_name: str):
 def cargar_panel_inteligente(panel_model: str):
     """🔧 CORRECCIÓN: Busca paneles de forma inteligente (con y sin marca)"""
     try:
-        with open('backend/configs/panel_database.yaml', 'r', encoding='utf-8') as f:
+        with open('configs/panel_database.yaml', 'r', encoding='utf-8') as f:
             panel_db = yaml.safe_load(f)
         
         panels = panel_db.get('panels', {})
@@ -151,7 +151,7 @@ def calcular_factores_correccion_reales(i_nominal: float, config: dict) -> float
         print(f"🔧   Layout: {layout}")
         
         # Cargar factores de corrección del proyecto
-        project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+        project_normative_file = f"projects/{project_name}/normativa.yaml"
         
         if os.path.exists(project_normative_file):
             with open(project_normative_file, 'r', encoding='utf-8') as f:
@@ -159,7 +159,7 @@ def calcular_factores_correccion_reales(i_nominal: float, config: dict) -> float
             normativa_config = normativa_data['normativa']
             print(f"🔧 Usando normativa del proyecto")
         else:
-            with open('backend/configs/normativas.yaml', 'r', encoding='utf-8') as f:
+            with open('configs/normativas.yaml', 'r', encoding='utf-8') as f:
                 normativas_config = yaml.safe_load(f)
             normativa_config = normativas_config['normativas']['IEC']
             print(f"🔧 Usando normativa base IEC")
@@ -271,7 +271,7 @@ def verificar_configuracion_segura(project_name: str, normativa: str = "IEC"):
     
     try:
         # 1. Cargar información del proyecto directamente del Excel
-        excel_path = f"backend/projects/{project_name}/input.xlsx"
+        excel_path = f"projects/{project_name}/input.xlsx"
         
         if not os.path.exists(excel_path):
             raise FileNotFoundError(f"Excel no encontrado: {excel_path}")
@@ -289,7 +289,7 @@ def verificar_configuracion_segura(project_name: str, normativa: str = "IEC"):
         panel_data = cargar_panel_inteligente(panel_model)
         
         # 3. Verificar overrides del proyecto
-        dc_strings_yaml_path = f"backend/projects/{project_name}/normativas/dc_strings.yaml"
+        dc_strings_yaml_path = f"projects/{project_name}/normativas/dc_strings.yaml"
         overrides_exist = os.path.exists(dc_strings_yaml_path)
         print(f"🔧 Overrides de proyecto: {'SÍ' if overrides_exist else 'NO'}")
         
@@ -421,7 +421,7 @@ def verificar_proyecto_seguro(project_name: str, max_strings: int = 3):
         config, project_info = verificar_configuracion_segura(project_name)
         
         # Paso 2: Cargar datos del Excel
-        excel_path = f"backend/projects/{project_name}/input.xlsx"
+        excel_path = f"projects/{project_name}/input.xlsx"
         df = pd.read_excel(excel_path, sheet_name="dc_string_circuits")
         
         if df.empty:

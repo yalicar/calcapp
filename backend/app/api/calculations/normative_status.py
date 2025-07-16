@@ -18,7 +18,8 @@ router = APIRouter()
 # [1] Estado de configuración normativa de un proyecto específico
 # ------------------------------------------------------------------------------
 
-STAGES = ["dc_strings", "level_1_dc", "ac_circuits", "mv_circuits"]
+# 🔧 CORREGIDO: Agregada "cn1_inverter" a la lista de etapas
+STAGES = ["dc_strings", "cn1_inverter", "level_1_dc", "ac_circuits", "mv_circuits"]
 
 @router.get("/projects/{project_name}/normative-status")
 def get_project_normative_status(project_name: str):
@@ -29,8 +30,7 @@ def get_project_normative_status(project_name: str):
             "stages": {}
         }
 
-        # 🔧 CAMBIAR ESTA LÍNEA:
-        base_path = Path("backend/projects") / project_name / "normativas"  # Agregar "backend/"
+        base_path = Path("projects") / project_name / "normativas"
         found_any = False
 
         for stage in STAGES:
@@ -42,6 +42,12 @@ def get_project_normative_status(project_name: str):
             }
             if exists:
                 found_any = True
+                
+        # 🐛 DEBUG: Log para verificar archivos encontrados
+        logger.info(f"🔍 Verificando archivos en: {base_path}")
+        for stage in STAGES:
+            file_path = base_path / f"{stage}.yaml"
+            logger.info(f"📋 {stage}: {file_path.exists()} -> {file_path}")
 
         result["has_custom_config"] = found_any
         return result

@@ -106,6 +106,12 @@ normativas:
         description: "Secciones para combinadores DC según IEC"
         typical_current_range: "50-200 A"
         max_recommended_length: "1000 m"
+
+      cn1_inverter:
+        mm2: [16, 25, 35, 50, 70, 95, 120, 150, 185, 240,300,400,500,630]
+        description: "Secciones para combinadores DC según IEC"
+        typical_current_range: "50-200 A"
+        max_recommended_length: "1000 m"
       
       ac_circuits:
         mm2: [25, 35, 50, 70, 95, 120, 150, 185, 240, 300, 400, 500]

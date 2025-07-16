@@ -13,7 +13,7 @@ client = TestClient(app)
 def create_excel_file(project_name: str, valid: bool = True):
     """
     Crea un archivo Excel de prueba con datos válidos o inválidos,
-    en la ruta esperada por el validador: backend/projects/{project_name}/input.xlsx
+    en la ruta esperada por el validador: projects/{project_name}/input.xlsx
 
     Args:
         project_name: Nombre del proyecto (carpeta de destino).
@@ -22,7 +22,7 @@ def create_excel_file(project_name: str, valid: bool = True):
     Este archivo será consumido por el endpoint GET /data/validate-excel-content/{project_name}
     """
     # Ruta del archivo Excel
-    path = Path(f"backend/projects/{project_name}")
+    path = Path(f"projects/{project_name}")
     path.mkdir(parents=True, exist_ok=True)
     file_path = path / "input.xlsx"
 
@@ -112,7 +112,7 @@ def test_validate_excel_success():
     assert response.json()["message"] == "Excel content is valid."
 
     # Limpieza
-    shutil.rmtree(Path(f"backend/projects/{project_name}"))
+    shutil.rmtree(Path(f"projects/{project_name}"))
 
 
 # =============================================================================
@@ -132,4 +132,4 @@ def test_validate_excel_with_errors():
     assert len(response.json()["detail"]) > 0
 
     # Verifica que el archivo haya sido eliminado
-    assert not Path(f"backend/projects/{project_name}/input.xlsx").exists()
+    assert not Path(f"projects/{project_name}/input.xlsx").exists()

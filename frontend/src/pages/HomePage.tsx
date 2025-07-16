@@ -1,7 +1,20 @@
+/**
+ * HomePage.tsx
+ * 
+ * Página principal para crear o seleccionar proyectos.
+ * Incluye FlowNavigator para mostrar progreso del flujo de trabajo.
+ * 
+ * Funcionalidades:
+ * - Crear nuevos proyectos
+ * - Seleccionar proyectos existentes
+ * - Navegación a siguientes pasos del flujo
+ */
+
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useProject } from "../context/ProjectContext";
+import FlowNavigator from "../components/FlowNavigator";
 import "./HomePage.css";
 
 // ✅ MEJORA: Configuración centralizada
@@ -26,6 +39,13 @@ function HomePage() {
   
   const { setProjectName: setContextProjectName } = useProject();
   const navigate = useNavigate();
+
+  // Definir pasos del flujo
+  const flowSteps = [
+    { id: 'home', title: 'Proyecto', description: 'Crear o seleccionar proyecto' },
+    { id: 'upload', title: 'Datos', description: 'Subir archivo Excel' },
+    { id: 'calculations', title: 'Cálculos', description: 'Análisis de strings DC' }
+  ];
 
   // ✅ MEJORA: Cargar proyectos con manejo de errores
   useEffect(() => {
@@ -148,138 +168,158 @@ function HomePage() {
     }
   };
 
+  // Manejar navegación del FlowNavigator
+  const handleStepNavigation = (stepId: string) => {
+    const currentProjectName = mode === "create" ? projectName.trim() : selectedProject;
+    
+    // Solo redirigir sin validaciones
+    if (stepId === 'upload') {
+      navigate(`/projects/${currentProjectName}/upload`);
+    } else if (stepId === 'calculations') {
+      navigate(`/projects/${currentProjectName}/calculations/strings`);
+    }
+  };
+
   return (
-    <div className="page-wrapper">
-      <div className="card">
-        <div className="header">
-          <h1>Calculador de Cables DC</h1>
-          <p>Seleccione o cree un proyecto para comenzar</p>
-        </div>
+    <>
+      <FlowNavigator 
+        steps={flowSteps} 
+        currentStep="home"
+        onStepClick={handleStepNavigation}
+      />
+      
+      <div className="page-wrapper" style={{paddingTop: '40px'}}>
+        <div className="card">
+          <div className="header">
+            <h1>Calculador de Cables DC</h1>
+            <p>Seleccione o cree un proyecto para comenzar</p>
+          </div>
 
-        {/* Modo de operación */}
-        <div className="form-group">
-          <label className="label">Modo de operación</label>
-          <select 
-            value={mode} 
-            onChange={(e) => {
-              setMode(e.target.value as any);
-              setError(null); // Limpiar errores al cambiar modo
-            }}
-            disabled={loading}
-            className="select-input"
-          >
-            <option value="create">Crear nuevo proyecto</option>
-            <option value="select">Seleccionar proyecto existente</option>
-          </select>
-        </div>
-
-        {/* Crear nuevo proyecto */}
-        {mode === "create" && (
+          {/* Modo de operación */}
           <div className="form-group">
-            <label className="label">Nombre del nuevo proyecto</label>
-            <input
-              type="text"
-              value={projectName}
-              onChange={(e) => handleNameChange(e.target.value)}
-              placeholder="ej: proyecto_solar_2024"
+            <label className="label">Modo de operación</label>
+            <select 
+              value={mode} 
+              onChange={(e) => {
+                setMode(e.target.value as any);
+                setError(null); // Limpiar errores al cambiar modo
+              }}
               disabled={loading}
-              className={`text-input ${error && mode === "create" ? "error" : ""}`}
-              maxLength={50}
-            />
-            <small className="hint">
-              Solo letras, números, guiones (-) y guiones bajos (_). Entre 3 y 50 caracteres.
-            </small>
+              className="select-input"
+            >
+              <option value="create">Crear nuevo proyecto</option>
+              <option value="select">Seleccionar proyecto existente</option>
+            </select>
           </div>
-        )}
 
-        {/* Seleccionar proyecto existente */}
-        {mode === "select" && (
-          <div className="form-group">
-            <label className="label">Proyectos disponibles</label>
-            {loadingProjects ? (
-              <div className="loading-projects">Cargando proyectos...</div>
-            ) : existingProjects.length > 0 ? (
-              <select
-                value={selectedProject}
-                onChange={(e) => {
-                  setSelectedProject(e.target.value);
-                  setError(null);
-                }}
+          {/* Crear nuevo proyecto */}
+          {mode === "create" && (
+            <div className="form-group">
+              <label className="label">Nombre del nuevo proyecto</label>
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="ej: proyecto_solar_2024"
                 disabled={loading}
-                className="select-input"
-              >
-                <option value="">Seleccione un proyecto</option>
-                {existingProjects.map((project) => (
-                  <option key={project.name} value={project.name}>
-                    {project.name}
-                    {project.has_excel ? " (Excel)" : " (Sin datos)"}
-                    {project.last_modified && ` - ${new Date(project.last_modified).toLocaleDateString()}`}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="no-projects">
-                <p>No hay proyectos disponibles</p>
-                <button 
-                  onClick={() => setMode("create")}
-                  className="link-button"
-                >
-                  Crear el primer proyecto
-                </button>
-              </div>
-            )}
-            
-            {!loadingProjects && (
-              <button 
-                onClick={loadProjects}
-                className="refresh-button"
-                disabled={loading}
-              >
-                🔄 Actualizar lista
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Mensajes de error */}
-        {error && (
-          <div className="error-message">
-            <span className="error-icon">!</span>
-            {error}
-          </div>
-        )}
-
-        {/* Botón continuar */}
-        <button
-          onClick={handleContinue}
-          disabled={!canContinue()}
-          className={`continue-button ${!canContinue() ? "disabled" : ""}`}
-        >
-          {loading ? (
-            <>
-              <span className="spinner"></span>
-              {mode === "create" ? "Creando..." : "Cargando..."}
-            </>
-          ) : (
-            <>
-              {mode === "create" ? "Crear Proyecto" : "Seleccionar Proyecto"}
-              <span className="arrow">→</span>
-            </>
+                className={`text-input ${error && mode === "create" ? "error" : ""}`}
+                maxLength={50}
+              />
+              <small className="hint">
+                Solo letras, números, guiones (-) y guiones bajos (_). Entre 3 y 50 caracteres.
+              </small>
+            </div>
           )}
-        </button>
 
-        {/* Información adicional */}
-        <div className="info-section">
-          <h3>Sistema de Cálculo de Cables DC</h3>
-          <ul>
-            <li>Cálculo de secciones según normativas internacionales</li>
-            <li>Validación automática de caídas de tensión</li>
-            <li>Soporte para múltiples materiales conductores</li>
-            <li>Generación de reportes técnicos detallados</li>
-          </ul>
+          {/* Seleccionar proyecto existente */}
+          {mode === "select" && (
+            <div className="form-group">
+              <label className="label">Proyectos disponibles</label>
+              {loadingProjects ? (
+                <div className="loading-projects">Cargando proyectos...</div>
+              ) : existingProjects.length > 0 ? (
+                <select
+                  value={selectedProject}
+                  onChange={(e) => {
+                    setSelectedProject(e.target.value);
+                    setError(null);
+                  }}
+                  disabled={loading}
+                  className="select-input"
+                >
+                  <option value="">Seleccione un proyecto</option>
+                  {existingProjects.map((project) => (
+                    <option key={project.name} value={project.name}>
+                      {project.name}
+                      {project.has_excel ? " (Excel)" : " (Sin datos)"}
+                      {project.last_modified && ` - ${new Date(project.last_modified).toLocaleDateString()}`}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="no-projects">
+                  <p>No hay proyectos disponibles</p>
+                  <button 
+                    onClick={() => setMode("create")}
+                    className="link-button"
+                  >
+                    Crear el primer proyecto
+                  </button>
+                </div>
+              )}
+              
+              {!loadingProjects && (
+                <button 
+                  onClick={loadProjects}
+                  className="refresh-button"
+                  disabled={loading}
+                >
+                  🔄 Actualizar lista
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Mensajes de error */}
+          {error && (
+            <div className="error-message">
+              <span className="error-icon">!</span>
+              {error}
+            </div>
+          )}
+
+          {/* Botón continuar */}
+          <button
+            onClick={handleContinue}
+            disabled={!canContinue()}
+            className={`continue-button ${!canContinue() ? "disabled" : ""}`}
+          >
+            {loading ? (
+              <>
+                <span className="spinner"></span>
+                {mode === "create" ? "Creando..." : "Cargando..."}
+              </>
+            ) : (
+              <>
+                {mode === "create" ? "Crear Proyecto" : "Seleccionar Proyecto"}
+                <span className="arrow">→</span>
+              </>
+            )}
+          </button>
+
+          {/* Información adicional */}
+          <div className="info-section">
+            <h3>Sistema de Cálculo de Cables DC</h3>
+            <ul>
+              <li>Cálculo de secciones según normativas internacionales</li>
+              <li>Validación automática de caídas de tensión</li>
+              <li>Soporte para múltiples materiales conductores</li>
+              <li>Generación de reportes técnicos detallados</li>
+            </ul>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

@@ -1,0 +1,19 @@
+_metadata:
+  base_normative: IEC
+  circuit_type: cn1_inverter
+  source: user_override
+  stage_specific: true
+  updated_at: '2025-07-16T10:41:49.755901'
+cable:
+  material: copper
+  max_temp: 90
+correction_factors:
+  isc_safety_factor: 1.25
+  parallel_strings: 1
+installation:
+  depth_cm: 50
+  method: buried
+temperature_correction:
+  ambient_design: 35
+voltage_drop:
+  max_percentage: 1.5

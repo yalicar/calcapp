@@ -38,6 +38,15 @@ from .string_calculation import router as string_calculation_router
 
 
 # ==============================================================================
+# 🔌 MÓDULO NUEVO: cn1_calculation.py
+# Descripción: Cálculo de cables principales CN1 (Combiner Box → Inversor)
+# ==============================================================================
+
+from .cn1_calculation import calculate_iec_cn1, calculate_nec_cn1
+from .cn1_calculation import router as cn1_calculation_router
+
+
+# ==============================================================================
 # ✅ REGISTRO DE ROUTERS
 # Incluye cada subrouter con su correspondiente tag
 # ==============================================================================
@@ -45,3 +54,4 @@ from .string_calculation import router as string_calculation_router
 router.include_router(normative_status_router, tags=["Normative Status"])
 router.include_router(normative_parameters_router, tags=["Normative Parameters"])
 router.include_router(string_calculation_router, tags=["String Calculations"])
+router.include_router(cn1_calculation_router, tags=["CN1 Cable Calculations"])

@@ -56,7 +56,7 @@ def create_test_excel_file(project_name: str):
     """
     Crea un archivo Excel válido para pruebas con todas las hojas requeridas.
     """
-    base_path = Path(f"backend/projects/{project_name}")
+    base_path = Path(f"projects/{project_name}")
     base_path.mkdir(parents=True, exist_ok=True)
     file_path = base_path / "input.xlsx"
 
@@ -78,7 +78,7 @@ def delete_test_excel_file(project_name: str):
     """
     Elimina el archivo Excel y su carpeta de proyecto después del test.
     """
-    project_dir = Path(f"backend/projects/{project_name}")
+    project_dir = Path(f"projects/{project_name}")
     if project_dir.exists():
         for f in project_dir.glob("*"):
             f.unlink()

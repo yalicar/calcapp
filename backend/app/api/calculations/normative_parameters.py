@@ -55,7 +55,7 @@ def get_project_stage_normative(project_name: str, stage: str):
         
         # 🔧 USAR LA MISMA RUTA QUE PUT Y DELETE
         stage_file = os.path.join(
-            "backend", "projects", project_name, "normativas", f"{stage}.yaml"
+            "projects", project_name, "normativas", f"{stage}.yaml"
         )
         
         if not os.path.exists(stage_file):
@@ -125,7 +125,7 @@ def save_stage_normative_parameters(
         })
 
         # Ruta destino del archivo YAML
-        stage_dir = f"backend/projects/{project_name}/normativas"
+        stage_dir = f"projects/{project_name}/normativas"
         os.makedirs(stage_dir, exist_ok=True)
         stage_path = os.path.join(stage_dir, f"{stage}.yaml")
 
@@ -163,7 +163,7 @@ def delete_stage_normative_parameters(project_name: str, stage: str):
 
         # Ruta del archivo a eliminar
         stage_file = os.path.join(
-            "backend", "projects", project_name, "normativas", f"{stage}.yaml"
+            "projects", project_name, "normativas", f"{stage}.yaml"
         )
 
         if os.path.exists(stage_file):
@@ -206,7 +206,7 @@ def copy_base_normative_to_all_stages(project_name: str, normative: str):
         # Etapas conocidas del sistema
         stages = ["dc_strings", "level_1_dc", "ac_circuits", "mv_circuits"]
 
-        stage_dir = os.path.join("backend", "projects", project_name, "normativas")
+        stage_dir = os.path.join("projects", project_name, "normativas")
         os.makedirs(stage_dir, exist_ok=True)
 
         generated = []

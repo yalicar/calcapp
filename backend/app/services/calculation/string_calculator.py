@@ -21,7 +21,7 @@ def load_custom_normativa_fixed(override_file: str, base_normativa: str = "IEC")
     """
     try:
         # 1. Cargar normativa base completa
-        with open("backend/configs/normativas.yaml") as f:
+        with open("configs/normativas.yaml") as f:
             yaml_data = yaml.safe_load(f)
         
         if base_normativa not in yaml_data["normativas"]:
@@ -396,7 +396,7 @@ def diagnose_config(config: dict) -> dict:
 def validate_normativas_yaml():
     """Valida que el YAML de normativas tenga la estructura correcta"""
     try:
-        with open("backend/configs/normativas.yaml") as f:
+        with open("configs/normativas.yaml") as f:
             yaml_data = yaml.safe_load(f)
         
         # Verificar estructura básica
@@ -446,7 +446,7 @@ def validate_normativas_yaml():
         return "normativas_structure"
             
     except FileNotFoundError:
-        raise FileNotFoundError("No se encontró el archivo backend/configs/normativas.yaml")
+        raise FileNotFoundError("No se encontró el archivo configs/normativas.yaml")
     except Exception as e:
         raise ValueError(f"Error validando YAML de normativas: {str(e)}")
 
@@ -459,7 +459,7 @@ def load_sections_config(normativa: str = "IEC"):
     """
     structure_type = validate_normativas_yaml()
     
-    with open("backend/configs/normativas.yaml") as f:
+    with open("configs/normativas.yaml") as f:
         yaml_data = yaml.safe_load(f)
     
     normativas = yaml_data["normativas"]
@@ -480,11 +480,13 @@ def load_sections_config(normativa: str = "IEC"):
     # Verificar estructura de secciones
     if "dc_strings" in sections:
         # Estructura nueva separada por tipos
-        return {
+        result = {
             "dc_strings": sorted(sections["dc_strings"]["mm2"]),
             "level_1_dc": sorted(sections["level_1_dc"]["mm2"]),
             "ac_circuits": sorted(sections["ac_circuits"]["mm2"]),
             "mv_circuits": sorted(sections.get("mv_circuits", {}).get("mm2", [])),
+            # ✅ AGREGAR CN1_INVERTER AQUÍ:
+            "cn1_inverter": sorted(sections.get("cn1_inverter", {}).get("mm2", sections["level_1_dc"]["mm2"])),
             "structure_type": "new",
             "normativa_used": normativa,
             "normativa_info": {
@@ -494,6 +496,11 @@ def load_sections_config(normativa: str = "IEC"):
             },
             "metadata": yaml_data.get("metadata", {})
         }
+        
+        # ✅ LOG PARA VERIFICAR QUE SE CARGÓ
+        logger.info(f"Secciones CN1 cargadas: {len(result['cn1_inverter'])} secciones disponibles")
+        return result
+        
     elif "mm2" in sections:
         # Estructura legacy - usar las mismas secciones para todos los tipos
         standard_sections = sorted(sections["mm2"])
@@ -502,6 +509,8 @@ def load_sections_config(normativa: str = "IEC"):
             "level_1_dc": standard_sections,
             "ac_circuits": standard_sections,
             "mv_circuits": standard_sections,
+            # ✅ AGREGAR CN1_INVERTER AQUÍ TAMBIÉN:
+            "cn1_inverter": standard_sections,
             "structure_type": "legacy",
             "normativa_used": normativa,
             "normativa_info": {
@@ -521,7 +530,7 @@ def get_normativa_config_fixed(normativa: str = "IEC", project_name: str = None)
     try:
         # 1. Si hay proyecto, buscar su normativa específica
         if project_name:
-            project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+            project_normative_file = f"projects/{project_name}/normativa.yaml"
             if os.path.exists(project_normative_file):
                 try:
                     with open(project_normative_file) as f:
@@ -532,7 +541,7 @@ def get_normativa_config_fixed(normativa: str = "IEC", project_name: str = None)
                     logger.warning(f"Error cargando normativa del proyecto, usando base: {e}")
         
         # 2. Usar normativa base
-        with open("backend/configs/normativas.yaml") as f:
+        with open("configs/normativas.yaml") as f:
             yaml_data = yaml.safe_load(f)
         
         if normativa not in yaml_data["normativas"]:
@@ -553,7 +562,7 @@ def create_project_normative_copy(project_name: str, base_norm: str = "IEC"):
     """
     try:
         # 1. Cargar normativa base
-        with open("backend/configs/normativas.yaml") as f:
+        with open("configs/normativas.yaml") as f:
             yaml_data = yaml.safe_load(f)
         
         if base_norm not in yaml_data["normativas"]:
@@ -571,7 +580,7 @@ def create_project_normative_copy(project_name: str, base_norm: str = "IEC"):
         }
         
         # 3. Guardar en el proyecto
-        project_dir = f"backend/projects/{project_name}"
+        project_dir = f"projects/{project_name}"
         os.makedirs(project_dir, exist_ok=True)
         
         normative_file = f"{project_dir}/normativa.yaml"
@@ -590,7 +599,7 @@ def update_project_normative(project_name: str, yaml_overrides: dict, base_norm:
     ✅ NUEVA: Actualiza normativa específica del proyecto
     """
     try:
-        project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+        project_normative_file = f"projects/{project_name}/normativa.yaml"
         
         # 1. Si no existe copia, crearla
         if not os.path.exists(project_normative_file):
@@ -637,7 +646,7 @@ def reset_project_normative(project_name: str):
     ✅ NUEVA: Elimina normativa del proyecto (vuelve a usar base)
     """
     try:
-        project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+        project_normative_file = f"projects/{project_name}/normativa.yaml"
         
         if os.path.exists(project_normative_file):
             os.remove(project_normative_file)
@@ -671,7 +680,7 @@ except Exception as e:
 
 # Cargar materiales
 try:
-    with open("backend/configs/material_properties.yaml") as f:
+    with open("configs/material_properties.yaml") as f:
         MATERIALS = yaml.safe_load(f)["materials"]
     logger.info("Propiedades de materiales cargadas exitosamente")
 except Exception as e:
@@ -704,7 +713,7 @@ def get_available_sections(circuit_type: str = "dc_strings") -> List[float]:
 def get_available_normativas() -> List[str]:
     """Obtiene la lista de normativas disponibles"""
     try:
-        with open("backend/configs/normativas.yaml") as f:
+        with open("configs/normativas.yaml") as f:
             yaml_data = yaml.safe_load(f)
         return list(yaml_data["normativas"].keys())
     except Exception as e:
@@ -892,7 +901,7 @@ def calculate_string_section(row: pd.Series, config: dict, circuit_type: str = "
         # ✅ DEBUG: Verificar qué normativa se está usando
         project_name = config.get("project_name")
         if project_name:
-            project_normative_file = f"backend/projects/{project_name}/normativa.yaml"
+            project_normative_file = f"projects/{project_name}/normativa.yaml"
             if os.path.exists(project_normative_file):
                 logger.info(f"🔥 USANDO NORMATIVA DEL PROYECTO: {project_normative_file}")
                 # Verificar algunos parámetros clave
@@ -1138,3 +1147,327 @@ def test_custom_normativa():
             print(f"❌ Error en cálculo: {e}")
     else:
         print(f"❌ Problemas en normativa: {diagnosis['errors']}")
+
+# ===== AGREGAR AL FINAL DE string_calculator.py =====
+
+# REEMPLAZAR la función calculate_cn1_section existente en string_calculator.py con esta versión corregida:
+
+def calculate_cn1_section(row: pd.Series, config: dict, circuit_type: str = "cn1_inverter") -> dict:
+    """
+    Calcula sección CN1 con corriente combinada de múltiples strings
+    CORREGIDO: Usa normalización correcta para mapeo de strings en paralelo
+    """
+    try:
+        # Validar configuración
+        config = validate_config_parameters(config)
+        
+        # Información del circuito
+        circuit_id = str(row.get("circuit_id", "UNKNOWN"))
+        length_pos = float(row.get("length_pos_m", 0))
+        length_neg = float(row.get("length_neg_m", 0))
+
+        # Validar longitudes
+        if length_pos <= 0 or length_neg <= 0:
+            raise ValueError(f"Longitudes inválidas: pos={length_pos}m, neg={length_neg}m")
+
+        # CORREGIDO: Normalizar circuit_id para mapeo consistente
+        # cn1-1 + INV-1 → cn1-01-inv1
+        inverter_id = str(row.get("inverter_id", ""))
+        normalized_circuit_id = normalize_circuit_id_from_cn1_table(circuit_id, inverter_id)
+
+        # Obtener número de strings en paralelo desde config
+        parallel_mapping = config.get('cn1_parallel_mapping', {})
+        parallel_strings = parallel_mapping.get(normalized_circuit_id, 1)
+        
+        # Debug logging mejorado
+        if normalized_circuit_id not in parallel_mapping:
+            logger.warning(f"[CN1] circuit_id '{normalized_circuit_id}' no encontrado en mapping")
+            logger.warning(f"[CN1] Raw inputs: circuit_id='{circuit_id}', inverter_id='{inverter_id}'")
+            logger.warning(f"[CN1] Available mappings: {list(parallel_mapping.keys())[:5]}...")
+        else:
+            logger.info(f"[CN1] {normalized_circuit_id}: encontrado {parallel_strings} strings en paralelo")
+
+        # CORRIENTE COMBINADA: Isc_base × número_de_strings
+        isc_base = config["isc_ref"]  # Corriente de un solo string
+        isc_combined = isc_base * parallel_strings  # Corriente combinada
+        
+        # Factor de seguridad se aplica a la corriente combinada
+        isc_safety_factor = config.get("isc_correction", 1.25)
+        i_nominal = isc_combined * isc_safety_factor
+        
+        logger.info(f"CN1 {normalized_circuit_id}: {parallel_strings} strings → "
+                   f"{isc_base:.2f}A × {parallel_strings} = {isc_combined:.2f}A → "
+                   f"nominal: {i_nominal:.2f}A")
+
+        # Aplicar factores de corrección (temperatura, agrupamiento)
+        i_adj = apply_correction_factors(i_nominal, config)
+        
+        # LONGITUDES: NO MULTIPLICAR - ya están dadas correctamente en el Excel
+        length_total = length_pos + length_neg  # Distancia real del cable CN1
+
+        # Obtener resistividad
+        material = config.get("cable", {}).get("material", "copper")
+        temp_operating = config.get("correction_factors", {}).get("ambient_temperature", {}).get("current_ambient", 30)
+        resistivity_ohm_mm2_per_m = get_material_resistivity(material, temp_operating)
+
+        # Parámetros de caída de tensión
+        max_percentage = config["voltage_drop"]["max_percentage"]
+        v_ref = config["voltage_drop"]["reference_voltage"]
+        max_voltage_drop_v = v_ref * (max_percentage / 100)
+        
+        # Validar antes de dividir
+        if max_voltage_drop_v <= 0:
+            raise ValueError(f"Caída de tensión máxima inválida: {max_voltage_drop_v}V")
+        
+        # Cálculo de sección teórica (con corriente combinada, longitud real)
+        numerator = 2 * resistivity_ohm_mm2_per_m * length_total * i_adj
+        s_teorica_mm2 = numerator / max_voltage_drop_v
+        
+        # Validar resultado
+        if s_teorica_mm2 <= 0:
+            raise ValueError(f"Sección teórica inválida: {s_teorica_mm2}mm²")
+        
+        # Obtener sección comercial CN1 (usa secciones más gruesas)
+        s_comercial_mm2 = get_commercial_section(s_teorica_mm2, circuit_type)
+
+        if s_comercial_mm2 and s_comercial_mm2 > 0:
+            # Cálculos finales
+            v_drop_real = (2 * resistivity_ohm_mm2_per_m * length_total * i_adj) / s_comercial_mm2
+            v_drop_pct = (v_drop_real / v_ref) * 100
+            resistance_total = (2 * resistivity_ohm_mm2_per_m * length_total) / s_comercial_mm2
+            joule_losses = (i_adj ** 2) * resistance_total
+
+            # Estado de la caída de tensión
+            if v_drop_pct <= max_percentage:
+                voltage_status = "OK"
+            elif v_drop_pct <= max_percentage * 1.1:
+                voltage_status = "WARNING"
+            else:
+                voltage_status = "CRITICAL"
+        else:
+            v_drop_real = None
+            v_drop_pct = None
+            joule_losses = None
+            voltage_status = "NO_SECTION"
+            resistance_total = None
+
+        # Resultado con información CN1 específica
+        result = {
+            "circuit_id": circuit_id,  # Mantener ID original para mostrar
+            "normalized_circuit_id": normalized_circuit_id,  # Para debugging
+            "parallel_strings": parallel_strings,
+            "isc_base": round(isc_base, 2),
+            "isc_combined": round(isc_combined, 2),
+            "length_total_m": round(length_total, 2),
+            "i_nominal": round(i_nominal, 2),
+            "i_adjusted": round(i_adj, 2),
+            "resistivity_ohm_mm2_per_m": round(resistivity_ohm_mm2_per_m, 6),
+            "s_teorica_mm2": round(s_teorica_mm2, 3),
+            "s_comercial_mm2": s_comercial_mm2,
+            "v_drop_real_volts": round(v_drop_real, 3) if v_drop_real is not None else None,
+            "v_drop_real_pct": round(v_drop_pct, 3) if v_drop_pct is not None else None,
+            "v_drop_max_volts": round(max_voltage_drop_v, 3),
+            "joule_losses_w": round(joule_losses, 2) if joule_losses is not None else None,
+            "resistance_total_ohm": round(resistance_total, 6) if resistance_total is not None else None,
+            "reference_voltage": v_ref,
+            "max_vdrop_pct": max_percentage,
+            "voltage_status": voltage_status,
+            "circuit_type": circuit_type,
+            "normativa": SECTIONS_CONFIG["normativa_used"],
+            "cable_material": material,
+            "calculation_status": "SUCCESS",
+            "calculation_type": "CN1_COMBINED"
+        }
+
+        logger.debug(f"CN1 {circuit_id} calculado exitosamente: {parallel_strings} strings, {isc_combined:.2f}A combinada")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error calculando CN1 {row.get('circuit_id', 'UNKNOWN')}: {e}")
+        return {
+            "circuit_id": str(row.get("circuit_id", "UNKNOWN")),
+            "error": str(e),
+            "calculation_status": "ERROR",
+            "calculation_type": "CN1_COMBINED",
+            "normativa": SECTIONS_CONFIG.get("normativa_used", "UNKNOWN")
+        }
+
+def calculate_all_cn1_circuits(df: pd.DataFrame, config: dict, circuit_type: str = "cn1_inverter") -> List[dict]:
+    """
+    ✅ NUEVA FUNCIÓN: Calcula todos los circuits CN1 con corriente combinada
+    """
+    parallel_mapping = config.get('cn1_parallel_mapping', {})
+    
+    logger.info(f"Iniciando cálculo CN1 de {len(df)} circuits con corriente combinada")
+    logger.info(f"Mappings disponibles: {len(parallel_mapping)} circuits con strings en paralelo")
+    
+    results = []
+    success_count = 0
+    error_count = 0
+    
+    for index, row in df.iterrows():
+        try:
+            # Usar función específica para CN1
+            result = calculate_cn1_section(row, config, circuit_type)
+            results.append(result)
+            
+            if "error" not in result:
+                success_count += 1
+                # Log información útil para verificación
+                circuit_id = result.get("circuit_id", "UNKNOWN")
+                parallel_strings = result.get("parallel_strings", 1)
+                isc_combined = result.get("isc_combined", 0)
+                logger.debug(f"✅ CN1 {circuit_id}: {parallel_strings} strings, {isc_combined:.1f}A combinada")
+            else:
+                error_count += 1
+                
+        except Exception as e:
+            logger.error(f"Error fatal en CN1 fila {index}: {e}")
+            error_result = {
+                "circuit_id": str(row.get("circuit_id", f"CN1_ROW_{index}")),
+                "error": f"Error fatal: {str(e)}",
+                "calculation_status": "FATAL_ERROR",
+                "calculation_type": "CN1_COMBINED",
+                "normativa": SECTIONS_CONFIG.get("normativa_used", "UNKNOWN")
+            }
+            results.append(error_result)
+            error_count += 1
+    
+    # Estadísticas mejoradas
+    if success_count > 0:
+        successful_results = [r for r in results if "error" not in r]
+        current_range = {
+            "min": min(r.get("isc_combined", 0) for r in successful_results),
+            "max": max(r.get("isc_combined", 0) for r in successful_results),
+        }
+        strings_range = {
+            "min": min(r.get("parallel_strings", 1) for r in successful_results),
+            "max": max(r.get("parallel_strings", 1) for r in successful_results),
+        }
+        
+        logger.info(f"Cálculo CN1 completado: {success_count} exitosos, {error_count} errores")
+        logger.info(f"Rango corriente combinada: {current_range['min']:.1f}A - {current_range['max']:.1f}A")
+        logger.info(f"Rango strings en paralelo: {strings_range['min']} - {strings_range['max']}")
+    else:
+        logger.warning(f"Cálculo CN1 completado: 0 exitosos, {error_count} errores")
+    
+    return results
+
+# AGREGAR estas funciones al final de backend/app/services/calculation/string_calculator.py
+
+def calculate_cn1_parallel_strings(project_name: str) -> dict:
+    """
+    ✅ NUEVA FUNCIÓN FALTANTE: Calcula strings en paralelo por CN1
+    Mapea correctamente CN1-XX → cn1-XX-invY
+    """
+    from app.utils.filesystem import load_excel_sheet
+    
+    try:
+        logger.info(f"[DEBUG] calculate_cn1_parallel_strings INICIANDO para {project_name}")
+        
+        df = load_excel_sheet(project_name, sheet_name="dc_string_circuits")
+        logger.info(f"[DEBUG] Cargados {len(df)} rows de dc_string_circuits")
+
+        if df.empty:
+            logger.warning("[DEBUG] La hoja 'dc_string_circuits' está vacía.")
+            return {}
+
+        if "cn1_id" not in df.columns or "inverter_id" not in df.columns:
+            logger.warning(f"[DEBUG] Columnas disponibles: {list(df.columns)}")
+            logger.warning("[DEBUG] Faltan columnas 'cn1_id' o 'inverter_id' en hoja dc_string_circuits.")
+            return {}
+
+        # Log de algunos ejemplos de datos originales
+        sample_data = df[["cn1_id", "inverter_id"]].head(3)
+        logger.info(f"[DEBUG] Ejemplos de datos originales:\n{sample_data.to_string()}")
+
+        def build_mapping_circuit_id(row):
+            """
+            Convierte CN1-01 + INV-1 → cn1-01-inv1
+            para que coincida con el formato usado en dc_cn1_circuits
+            """
+            try:
+                cn1_raw = str(row["cn1_id"]).upper().strip()
+                inv_raw = str(row["inverter_id"]).upper().strip()
+                
+                logger.debug(f"[DEBUG] Procesando: cn1_raw='{cn1_raw}', inv_raw='{inv_raw}'")
+                
+                if cn1_raw.startswith("CN1-"):
+                    # CN1-01 → 01
+                    cn1_num = cn1_raw.replace("CN1-", "").zfill(2)
+                else:
+                    cn1_num = str(row["cn1_id"]).zfill(2)
+                
+                if inv_raw.startswith("INV-"):
+                    # INV-1 → 1
+                    inv_num = inv_raw.replace("INV-", "").lstrip("0") or "0"
+                else:
+                    inv_num = str(row["inverter_id"]).lstrip("0") or "0"
+                
+                result = f"cn1-{cn1_num}-inv{inv_num}"
+                logger.debug(f"[DEBUG] Resultado: '{result}'")
+                return result
+                
+            except Exception as e:
+                logger.error(f"[DEBUG] Error building mapping circuit_id: {e}")
+                return "UNKNOWN"
+
+        df["mapping_circuit_id"] = df.apply(build_mapping_circuit_id, axis=1)
+
+        # Log de algunos ejemplos después del mapeo
+        sample_mapped = df[["cn1_id", "inverter_id", "mapping_circuit_id"]].head(5)
+        logger.info(f"[DEBUG] Ejemplos después del mapeo:\n{sample_mapped.to_string()}")
+
+        # Contar cuántos strings hay por cada combinación CN1 + Inversor
+        mapping = df["mapping_circuit_id"].value_counts().to_dict()
+        
+        # Log detallado para debugging
+        logger.info(f"[DEBUG] Calculados strings en paralelo para {len(mapping)} circuitos CN1:")
+        for circuit_id, count in sorted(mapping.items()):
+            logger.info(f"[DEBUG]   {circuit_id}: {count} strings")
+        
+        # Mostrar algunos ejemplos del mapeo para verificar
+        sample_mappings = df[["cn1_id", "inverter_id", "mapping_circuit_id"]].drop_duplicates().head(5)
+        logger.info(f"[DEBUG] Ejemplos de mapeo únicos:\n{sample_mappings.to_string()}")
+        
+        # Verificar casos problemáticos
+        unknown_count = mapping.get("UNKNOWN", 0)
+        if unknown_count > 0:
+            logger.warning(f"[DEBUG] ¡ATENCIÓN! {unknown_count} strings con circuit_id 'UNKNOWN'")
+            unknown_samples = df[df["mapping_circuit_id"] == "UNKNOWN"][["cn1_id", "inverter_id"]].head(3)
+            logger.warning(f"[DEBUG] Ejemplos de IDs problemáticos:\n{unknown_samples.to_string()}")
+
+        logger.info(f"[DEBUG] calculate_cn1_parallel_strings TERMINANDO - retornando {len(mapping)} mappings")
+        return mapping
+
+    except Exception as e:
+        logger.error(f"[DEBUG] Error al calcular strings en paralelo por CN1: {e}")
+        import traceback
+        logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+        return {}
+
+def normalize_circuit_id_from_cn1_table(cn1_circuit_id: str, inverter_id: str) -> str:
+    """
+    ✅ NUEVA FUNCIÓN FALTANTE: Normaliza circuit_id para tabla dc_cn1_circuits
+    """
+    try:
+        # Normalizar CN1 desde circuit_id
+        cn1_str = str(cn1_circuit_id).lower().strip()
+        if cn1_str.startswith("cn1-"):
+            cn1_num = cn1_str.replace("cn1-", "").zfill(2)  # ej: "1" → "01"
+        else:
+            cn1_num = str(cn1_circuit_id).zfill(2)
+        
+        # Normalizar Inversor
+        inv_str = str(inverter_id).upper().strip()
+        if inv_str.startswith("INV-"):
+            inv_num = inv_str.replace("INV-", "").lstrip("0") or "0"
+        else:
+            inv_num = str(inverter_id).lstrip("0") or "0"
+        
+        circuit_id = f"cn1-{cn1_num}-inv{inv_num}"
+        return circuit_id
+        
+    except Exception as e:
+        logger.error(f"Error normalizando desde CN1 table: circuit_id={cn1_circuit_id}, inv={inverter_id} -> {e}")
+        return "UNKNOWN"

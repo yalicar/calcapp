@@ -352,7 +352,7 @@ const NormativeEditor: React.FC<NormativeEditorProps> = ({
   const reloadFromBase = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/calculations/normatives/${selectedBaseNorm}/parameters`);
+      const response = await fetch(`http://localhost:8000/normatives/${selectedBaseNorm}/parameters`);
       if (response.ok) {
         const baseParams = await response.json();
         console.log('🔄 Parámetros base cargados:', baseParams);

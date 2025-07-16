@@ -3,17 +3,17 @@ _metadata:
   circuit_type: dc_strings
   source: user_override
   stage_specific: true
-  updated_at: '2025-07-04T09:05:58.041558'
+  updated_at: '2025-07-15T09:24:32.861100'
 cable:
   material: copper
   max_temp: 90
 correction_factors:
   isc_safety_factor: 1.25
-  parallel_strings: 10
+  parallel_strings: 1
 installation:
   depth_cm: 50
   method: conduit
 temperature_correction:
   ambient_design: 40
 voltage_drop:
-  max_percentage: 5
+  max_percentage: 1.5

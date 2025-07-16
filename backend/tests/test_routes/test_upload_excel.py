@@ -51,7 +51,7 @@ def test_upload_excel_success():
     data = response.json()
     assert data["message"].startswith("Excel file uploaded")
     assert data["filename"] == "project_data.xlsx"
-    assert os.path.exists(f"backend/projects/{project_name}/input.xlsx")
+    assert os.path.exists(f"projects/{project_name}/input.xlsx")
 
     teardown_project(project_name)
 
